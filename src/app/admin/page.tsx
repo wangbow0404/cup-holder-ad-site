@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, ReactNode } from 'react';
+import { useState } from 'react';
 
 // shadcn-ui
 import { Card } from '@/components/ui/card';
@@ -48,9 +48,9 @@ import {
 // ---------- utils ----------
 const formatKR = (n: number) => new Intl.NumberFormat('ko-KR').format(n);
 
-// Pie 라벨 렌더러 (ReactNode 반환 + JSX 밖 분리)
+// Pie 라벨 렌더러 (JSX 밖으로 분리하여 타입 명시)
 type PieLabelPayload = { name: string; percent: number };
-const renderPieLabel = ({ name, percent }: PieLabelPayload): ReactNode =>
+const renderPieLabel = ({ name, percent }: PieLabelPayload) =>
   `${name} ${(percent * 100).toFixed(0)}%`;
 
 // ---------- page ----------
@@ -339,7 +339,7 @@ export default function AdminDashboardPage() {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={renderPieLabel as any}
+                label={renderPieLabel}
                 outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"

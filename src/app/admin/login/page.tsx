@@ -141,7 +141,7 @@ export default function PartnerLoginPage() {
       setLoading(true);
 
       // ⭐️⭐️⭐️ 핵심 수정: 이동 경로를 메인 관리자 페이지로 수정 ⭐️⭐️⭐️
-      const to = '/Administrator'; 
+      const to = '/admin'; 
       
       // 딜레이를 주어 로딩 상태를 잠깐 보여줍니다.
       await new Promise(resolve => setTimeout(resolve, 500)); 
