@@ -5,10 +5,15 @@ import Link from 'next/link';
 
 /** ===== 설정 ===== */
 const AGE_OPTIONS = ['10~20대', '20~30대', '30~40대', '40~50대', '50대 이상'];
-const AREA_OPTIONS = ['회사', '학교', '주거지', '역세권', '오피스', '상가', '관광지'];
+const AREA_OPTIONS = ['회사', '주거지', '역세권', '오피스', '상가', '관광지', '학원가']; // 학교→학원가
+const SEGMENT_PARENT_OPTIONS = ['직장인','학생','커플','프리랜서','외국인','가족/학부모','여행객','노인층'];
+const STUDENT_SUBOPTIONS = ['초등학생','중학생','고등학생','대학생'];
+
 const AGE_MIN = 1, AGE_MAX = 3;
 const AREA_MIN = 2, AREA_MAX = 4;
-const SMS_TIMER_SEC = 180; // 인증코드 유효시간(초)
+const SEG_MIN = 2, SEG_MAX = 5; // 고객층 최소/최대(학생 하위 포함)
+
+const SMS_TIMER_SEC = 180;
 
 /** ===== 유틸 ===== */
 const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
@@ -23,6 +28,12 @@ export default function PartnerJoinPage() {
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; }
       .scrollbox::-webkit-scrollbar { width: 6px; }
       .scrollbox::-webkit-scrollbar-thumb { background:#d4d4d8; border-radius:8px; }
+
+      /* range */
+      input[type="range"] { -webkit-appearance:none; width:100%; height:16px; border-radius:9999px; background:#e5e7eb; }
+      input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:9999px; background:#fff; border:2px solid #9ca3af; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+      input[type="range"]::-moz-range-thumb { width:22px; height:22px; border-radius:9999px; background:#fff; border:2px solid #9ca3af; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+      input[type="range"]::-moz-range-track { height:16px; border-radius:9999px; background:transparent; }
     `;
     const el = document.createElement('style');
     el.innerHTML = css;
@@ -30,10 +41,10 @@ export default function PartnerJoinPage() {
     return () => { document.head.removeChild(el); };
   }, []);
 
-  /** 단계: 약관(1) → 폼(2) */
-  const [step, setStep] = useState<1 | 2>(1); // 운영에선 1로 변경
+  /** 단계 */
+  const [step, setStep] = useState<1 | 2>(1);
 
-  /** 약관 동의 */
+  /** 약관 */
   const [agree, setAgree] = useState({ tos: false, privacy: false, lbs: false, marketing: false });
   const requiredOK = agree.tos && agree.privacy;
   const allChecked = Object.values(agree).every(Boolean);
@@ -57,9 +68,12 @@ export default function PartnerJoinPage() {
     workdays: 6 as 1|2|3|4|5|6|7,
     ageGroups: [] as string[],
     areaTypes: [] as string[],
+    customerSegments: [] as string[], // 상위
+    studentSubs: [] as string[],      // 학생 하위
+    malePct: 50,                      // 남성 %
   });
 
-  /** 아이디 중복체크 */
+  /** 아이디 체크 */
   const [idChecking, setIdChecking] = useState(false);
   const [idAvailable, setIdAvailable] = useState<null | boolean>(null);
   const checkId = useCallback(async (id: string) => {
@@ -72,7 +86,6 @@ export default function PartnerJoinPage() {
         body: JSON.stringify({ loginId: id }),
       });
       const data = await r.json().catch(() => ({}));
-      // 기대 응답: { available: boolean }
       setIdAvailable(Boolean(data?.available));
     } catch {
       setIdAvailable(null);
@@ -150,14 +163,13 @@ export default function PartnerJoinPage() {
     }
   }, [form.phone, form.smsCode, smsSent]);
 
-  /** 주소 찾기 (새 창 → postMessage로 수신) */
+  /** 주소 검색 */
   const openAddressSearch = () => {
     const w = window.open('/partner/address-search', 'addressSearch', 'width=560,height=640');
     if (!w) alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해 주세요.');
   };
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
-      // 기대 메시지: { type:'addressSelected', address:'...' }
       if (e?.data?.type === 'addressSelected' && typeof e.data.address === 'string') {
         setForm((p) => ({ ...p, address: e.data.address }));
       }
@@ -166,7 +178,7 @@ export default function PartnerJoinPage() {
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
-  /** 선택 헬퍼 */
+  /** 선택 헬퍼 (연령/상권) */
   const toggleIn = (key: 'ageGroups' | 'areaTypes', item: string, max: number) => {
     setForm((p) => {
       const cur = p[key];
@@ -176,8 +188,56 @@ export default function PartnerJoinPage() {
       return { ...p, [key]: [...cur, item] };
     });
   };
+
+  /** 고객층 카운트(학생 상위 제외, 하위 포함) */
+  const segmentCount = useMemo(
+    () => form.customerSegments.filter(s => s !== '학생').length + form.studentSubs.length,
+    [form.customerSegments, form.studentSubs]
+  );
+
   const ageCount = form.ageGroups.length;
   const areaCount = form.areaTypes.length;
+
+  /** 학생 아코디언 상태 + 임시 선택 */
+  const [studentOpen, setStudentOpen] = useState(false);
+  const [studentTemp, setStudentTemp] = useState<string[]>([]);
+
+  const openStudent = () => {
+    // 행 클릭 시: 학생 자동 체크 + 임시 값 초기화
+    setForm(p => p.customerSegments.includes('학생') ? p : { ...p, customerSegments: [...p.customerSegments, '학생'] });
+    setStudentTemp(form.studentSubs);
+    setStudentOpen(true);
+  };
+  const closeStudent = () => setStudentOpen(false);
+
+  const toggleStudentCheck = () => {
+    // 체크박스 직접 클릭 시
+    const has = form.customerSegments.includes('학생');
+    if (has) {
+      // 학생 해제 → 하위도 초기화 & 아코디언 닫기
+      setForm(p => ({ ...p, customerSegments: p.customerSegments.filter(v => v !== '학생'), studentSubs: [] }));
+      setStudentOpen(false);
+    } else {
+      setForm(p => ({ ...p, customerSegments: [...p.customerSegments, '학생'] }));
+      setStudentTemp(form.studentSubs);
+      setStudentOpen(true);
+    }
+  };
+
+  const toggleStudentTemp = (sub: string) => {
+    const willAdd = !studentTemp.includes(sub);
+    // 현재 선택 총합(다른 상위 + 임시 하위)으로 제한 체크
+    const others = form.customerSegments.filter(s => s !== '학생').length;
+    const curTempCount = studentTemp.length;
+    const nextCount = willAdd ? curTempCount + 1 : curTempCount - 1;
+    if (willAdd && (others + curTempCount) >= SEG_MAX) return; // 초과 방지
+    setStudentTemp(prev => prev.includes(sub) ? prev.filter(s => s !== sub) : [...prev, sub]);
+  };
+
+  const confirmStudent = () => {
+    setForm(p => ({ ...p, studentSubs: studentTemp }));
+    setStudentOpen(false);
+  };
 
   /** 제출 */
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
@@ -187,6 +247,7 @@ export default function PartnerJoinPage() {
     if (!smsVerified) { alert('휴대폰 인증을 완료해 주세요.'); return; }
     if (ageCount < AGE_MIN) { alert(`연령대는 최소 ${AGE_MIN}개 선택해야 합니다. (최대 ${AGE_MAX})`); return; }
     if (areaCount < AREA_MIN) { alert(`상권유형은 최소 ${AREA_MIN}개 선택해야 합니다. (최대 ${AREA_MAX})`); return; }
+    if (segmentCount < SEG_MIN) { alert(`고객층은 최소 ${SEG_MIN}개 선택해야 합니다. (최대 ${SEG_MAX})`); return; }
 
     const payload = {
       companyName: form.companyName,
@@ -200,6 +261,11 @@ export default function PartnerJoinPage() {
       workdaysPerWeek: form.workdays,
       ageGroups: form.ageGroups,
       areaTypes: form.areaTypes,
+      customerSegments: [
+        ...form.customerSegments.filter(s => s !== '학생'),
+        ...form.studentSubs,
+      ],
+      gender: { male: form.malePct, female: 100 - form.malePct },
       agree: { ...agree },
     };
 
@@ -219,13 +285,20 @@ export default function PartnerJoinPage() {
     } catch {
       alert('네트워크 오류가 발생했습니다.');
     }
-  }, [agree, areaCount, ageCount, form, idAvailable, smsVerified]);
+  }, [agree, areaCount, ageCount, form, idAvailable, segmentCount, smsVerified]);
 
-  /** 렌더 */
+  /** 슬라이더 배경 */
+  const sliderBgStyle = useMemo<React.CSSProperties>(() => {
+    const male = clamp(form.malePct, 0, 100);
+    return {
+      background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${male}%, #ef4444 ${male}%, #ef4444 100%)`,
+    };
+  }, [form.malePct]);
+
   return (
     <main className="min-h-dvh grid place-items-center px-5 py-10 bg-neutral-50">
       <div className="w-full max-w-[900px]">
-        {/* 로고 (메인으로 이동) */}
+        {/* 로고 */}
         <div className="flex items-center justify-between mb-8 md:mb-10">
           <Link href="/" aria-label="위드폼 메인으로 이동">
             <img
@@ -238,7 +311,7 @@ export default function PartnerJoinPage() {
         </div>
 
         <section className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6 md:p-8">
-          {/* 단계 표시 */}
+          {/* 단계 */}
           <div className="flex items-center gap-3 text-sm mb-6">
             <div className="flex items-center gap-2">
               <span className={`inline-block w-2.5 h-2.5 rounded-full ${step === 1 ? 'bg-blue-600' : 'bg-neutral-300'}`} />
@@ -251,7 +324,7 @@ export default function PartnerJoinPage() {
             </div>
           </div>
 
-          {/* ============ STEP 1 ============ */}
+          {/* ===== STEP 1 ===== */}
           {step === 1 && (
             <form className="space-y-5" onSubmit={goStep2}>
               <label className="flex items-start gap-3 p-4 border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-50">
@@ -307,7 +380,7 @@ export default function PartnerJoinPage() {
             </form>
           )}
 
-          {/* ============ STEP 2 ============ */}
+          {/* ===== STEP 2 ===== */}
           {step === 2 && (
             <form className="space-y-6" onSubmit={onSubmit}>
               {/* A. 사업자 기본 */}
@@ -347,7 +420,7 @@ export default function PartnerJoinPage() {
                 </div>
               </div>
 
-              {/* B. 계정(ID/비번) */}
+              {/* B. 계정 */}
               <div className="pt-2">
                 <h3 className="text-lg md:text-xl font-extrabold text-neutral-900">B) 계정 설정</h3>
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
@@ -380,7 +453,7 @@ export default function PartnerJoinPage() {
                       placeholder="영문/숫자 8자 이상"
                     />
                   </div>
-                    <div>
+                  <div>
                     <label className="block text-sm font-medium text-neutral-700 mb-1">비밀번호 확인</label>
                     <input
                       value={form.password2}
@@ -389,7 +462,9 @@ export default function PartnerJoinPage() {
                       className="w-full rounded-xl border border-neutral-300 px-4 py-3 focus:border-blue-500 text-neutral-900"
                       placeholder="다시 입력"
                     />
-                    <p className="mt-1 text-xs text-neutral-500">{form.password && form.password2 && (form.password === form.password2 ? '일치합니다.' : '비밀번호가 일치하지 않습니다.')}</p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {form.password && form.password2 && (form.password === form.password2 ? '일치합니다.' : '비밀번호가 일치하지 않습니다.')}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -531,7 +606,126 @@ export default function PartnerJoinPage() {
                 </div>
               </div>
 
-              {/* F. 안내(소진알림/자동발주/등급/비용) */}
+              {/* F. 주 고객층 — 성별 + 좌측 리스트(학생 아코디언) */}
+              <div className="pt-2">
+                <h3 className="text-lg md:text-xl font-extrabold text-neutral-900">F) 주 고객층</h3>
+                <p className="text-sm text-neutral-500 mt-1">최소 {SEG_MIN}개, 최대 {SEG_MAX}개 선택 (학생은 하위에서 선택)</p>
+
+                {/* 성별 슬라이더 */}
+                <div className="mt-4 rounded-xl border border-neutral-200 p-4">
+                  <div className="flex items-center justify-between text-sm font-semibold text-neutral-800 mb-3">
+                    <span>성별 비율</span><span className="text-neutral-500">드래그하여 조정</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={form.malePct}
+                    onChange={(e) => setForm(p => ({ ...p, malePct: clamp(Number(e.target.value), 0, 100) }))}
+                    style={sliderBgStyle}
+                  />
+                  <div className="mt-2 flex items-center justify-between text-sm font-semibold">
+                    <span className="inline-flex items-center gap-2 text-neutral-900"><span className="inline-block w-3 h-3 rounded-full" style={{background:'#3b82f6'}}/>남자 {form.malePct}%</span>
+                    <span className="inline-flex items-center gap-2 text-neutral-900"><span className="inline-block w-3 h-3 rounded-full" style={{background:'#ef4444'}}/>여자 {100-form.malePct}%</span>
+                  </div>
+                </div>
+
+                {/* 상위 리스트 + 학생 아코디언 */}
+                <div className="mt-4">
+                  {/* 각각의 상위 항목 */}
+                  <div className="grid grid-cols-1 gap-2">
+                    {SEGMENT_PARENT_OPTIONS.map((opt) => {
+                      const isStudent = opt === '학생';
+                      const selectedOthers = form.customerSegments.filter(s => s !== '학생').length + form.studentSubs.length;
+                      const wouldExceed = !form.customerSegments.includes(opt) && !isStudent && selectedOthers >= SEG_MAX;
+
+                      if (isStudent) {
+                        return (
+                          <div key="학생" className="rounded-xl border border-neutral-200">
+                            {/* 헤더 행 */}
+                            <div
+                              className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${wouldExceed ? 'opacity-50' : 'hover:bg-neutral-50'}`}
+                              onClick={() => openStudent()}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-blue-600"
+                                checked={form.customerSegments.includes('학생')}
+                                onChange={(e) => { e.stopPropagation(); toggleStudentCheck(); }}
+                                onClick={(e)=>e.stopPropagation()}
+                              />
+                              <span className="text-neutral-800">학생</span>
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">세부 {form.studentSubs.length}</span>
+                              <span className={`ml-auto text-neutral-400 transition-transform ${studentOpen ? 'rotate-180' : ''}`}>▾</span>
+                            </div>
+
+                            {/* 아코디언 본문 */}
+                            <div
+                              className={`overflow-hidden transition-[max-height,opacity] duration-300 ${studentOpen ? 'max-h-[480px] opacity-100' : 'max-h-0 opacity-0'}`}
+                            >
+                              <div className="p-3 border-t border-neutral-200 bg-neutral-50">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {STUDENT_SUBOPTIONS.map(sub => {
+                                    const tempHas = studentTemp.includes(sub);
+                                    const tempTotal = form.customerSegments.filter(s => s !== '학생').length + studentTemp.length;
+                                    const disabled = !tempHas && tempTotal >= SEG_MAX;
+                                    return (
+                                      <label key={sub} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 border bg-white ${disabled ? 'opacity-50' : ''}`}>
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
+                                          checked={tempHas}
+                                          onChange={() => toggleStudentTemp(sub)}
+                                          disabled={disabled}
+                                        />
+                                        <span className="text-neutral-800">{sub}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                  <button type="button" onClick={closeStudent} className="px-3 py-2 rounded-lg border border-neutral-300 text-neutral-700">취소</button>
+                                  <button type="button" onClick={confirmStudent} className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold">확인</button>
+                                </div>
+                                <p className="mt-2 text-xs text-neutral-500">※ ‘학생’ 상위 항목은 카운트에 포함되지 않으며, 하위 선택만 카운트됩니다.</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // 일반 항목
+                      return (
+                        <label
+                          key={opt}
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 border cursor-pointer ${wouldExceed ? 'opacity-50' : 'hover:bg-neutral-50'}`}
+                          onClick={(e) => {
+                            if (!form.customerSegments.includes(opt) && selectedOthers >= SEG_MAX) { e.preventDefault(); return; }
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
+                            checked={form.customerSegments.includes(opt)}
+                            onChange={() => {
+                              setForm(p => p.customerSegments.includes(opt)
+                                ? { ...p, customerSegments: p.customerSegments.filter(v => v !== opt) }
+                                : (selectedOthers >= SEG_MAX ? p : { ...p, customerSegments: [...p.customerSegments, opt] })
+                              );
+                            }}
+                          />
+                          <span className="text-neutral-800">{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <p className="mt-2 text-xs text-neutral-500">선택 {segmentCount}/{SEG_MAX} (최소 {SEG_MIN})</p>
+                </div>
+              </div>
+
+              {/* 안내 */}
               <div className="pt-2 grid gap-3">
                 <div className="rounded-xl border border-neutral-200 p-4 bg-neutral-50">
                   <div className="text-sm font-semibold text-neutral-800">소진/알림</div>
@@ -554,20 +748,14 @@ export default function PartnerJoinPage() {
               {/* 버튼 */}
               <div className="flex items-center justify-end gap-3 pt-2">
                 <a href="/partner/login" className="px-4 py-2.5 rounded-lg border border-neutral-300 text-neutral-700">이전</a>
-                <button
-                  type="submit"
-                  className="px-5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                >
-                  가입 완료
-                </button>
+                <button type="submit" className="px-5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold">가입 완료</button>
               </div>
             </form>
           )}
         </section>
 
         <p className="text-center text-sm text-neutral-600 mt-6">
-          이미 계정이 있으신가요?{' '}
-          <a href="/partner/login" className="text-blue-600 hover:underline font-medium">로그인</a>
+          이미 계정이 있으신가요? <a href="/partner/login" className="text-blue-600 hover:underline font-medium">로그인</a>
         </p>
       </div>
     </main>

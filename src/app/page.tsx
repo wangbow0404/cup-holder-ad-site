@@ -20,7 +20,8 @@ const AUTOPLAY_INTERVAL = 5000;
 export default function Page() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const slidesLength = SLIDE_TITLES.length;
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // 브라우저/Node 환경 호환 안전 타입
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 모바일 메뉴
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -107,19 +108,12 @@ export default function Page() {
   );
   const FALLBACK_IMG = '/assets/images/ads/slide4.png';
 
-  // 견적 폼
-  const handleSubmitEstimate = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    alert('견적 문의가 접수되었습니다. 빠르게 연락드릴게요!');
-  };
-
   return (
     <>
-      {/* 전역 보조 스타일 */}
+      {/* 전역 보조 스타일 (영상 관련 셀렉터 제거됨) */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
-          video::-webkit-media-controls{display:none !important;}
           html{scroll-behavior:smooth;}
           .reveal{opacity:0; transform:translateY(12px); transition:opacity .5s ease, transform .5s ease;}
           .reveal.active{opacity:1; transform:translateY(0);}
@@ -154,7 +148,7 @@ export default function Page() {
             {/* 데스크톱 내비 */}
             <nav className="hidden md:flex items-center gap-6 text-gray-800">
               <div className="relative group">
-                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true" aria-expanded={false}>
+                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true">
                   광고매체
                 </button>
                 <div className="absolute left-0 top-full mt-2 min-w-[220px] p-3 bg-white border border-neutral-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
@@ -181,7 +175,7 @@ export default function Page() {
                 이용가이드
               </a>
               <div className="relative group">
-                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true" aria-expanded={false}>
+                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true">
                   커뮤니티
                 </button>
                 <div className="absolute left-0 top-full mt-2 min-w-[220px] p-3 bg-white border border-neutral-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
@@ -314,6 +308,7 @@ export default function Page() {
                   <a
                     href="/bag.html"
                     onClick={closeMenu}
+                    onKeyDown={(e) => e.key === 'Enter' && closeMenu()}
                     className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-600 hover:bg-neutral-100"
                   >
                     포장봉투 광고
@@ -409,12 +404,12 @@ export default function Page() {
       <main id="main" className="bg-white text-neutral-900">
         {/* HERO */}
         <section id="hero" className="relative min-h-[70vh] flex items-center justify-center text-center overflow-hidden">
-          {/* ⬇⬇⬇ 포스터 이미지를 PNG로 변경 */}
+          {/* 포스터 이미지 (영상 제거) */}
           <img
-  src="/assets/images/hero/banner.png"
-  alt="위드폼 배너"
-  className="absolute inset-0 w-full h-full object-cover"
-/>
+            src="/assets/images/hero/banner.png"
+            alt="위드폼 배너"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
 
           <div className="absolute inset-0 bg-black/40" aria-hidden="true"></div>
 
@@ -425,7 +420,7 @@ export default function Page() {
                 <span className="block opacity-95">커피 한 잔이 브랜드의 첫인상이 됩니다</span>
               </h1>
               <a
-                href="#estimate"
+                href="#ad-products"
                 onClick={closeMenu}
                 className="inline-flex mx-auto mt-2 bg-blue-600 text-white px-6 py-3 rounded-md text-lg font-semibold hover:bg-blue-700 reveal"
               >
@@ -490,7 +485,12 @@ export default function Page() {
                     src={slide.src}
                     alt={`컵홀더광고 ${idx + 1}`}
                     loading={idx === 0 ? 'eager' : 'lazy'}
-                    onError={(e) => ((e.target as HTMLImageElement).src = FALLBACK_IMG)}
+                    onError={(e) => {
+                      const img = e.currentTarget as HTMLImageElement;
+                      // 폴백에서도 에러가 나면 루프 방지
+                      if (img.src.endsWith('slide4.png')) return;
+                      img.src = FALLBACK_IMG;
+                    }}
                     className="relative w-full h-full object-cover rounded-2xl"
                   />
                 </article>
@@ -587,151 +587,16 @@ export default function Page() {
             </article>
           </div>
         </section>
-
-        {/* 견적 문의 */}
-        <section id="estimate" className="bg-neutral-100 py-16">
-          <div className="mx-auto max-w-[900px] px-6 lg:px-8">
-            <div className="text-center mb-10 reveal">
-              <h2 className="text-3xl md:text-4xl font-extrabold text-neutral-900">맞춤 견적 문의</h2>
-              <p className="mt-2 text-neutral-600">브랜드, 지역, 예산에 맞춘 제안을 받아보세요.</p>
-            </div>
-
-            <form
-              className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-neutral-200 reveal"
-              onSubmit={handleSubmitEstimate}
-            >
-              <div>
-                <label htmlFor="companyName" className="block text-sm font-medium text-neutral-700 mb-1">
-                  회사명 / 브랜드명
-                </label>
-                <input
-                  id="companyName"
-                  type="text"
-                  className="w-full rounded-lg border border-neutral-300 px-4 py-3"
-                  placeholder="예) 위드폼, 빌라드블랑"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="managerName" className="block text-sm font-medium text-neutral-700 mb-1">
-                  담당자명
-                </label>
-                <input
-                  id="managerName"
-                  type="text"
-                  className="w-full rounded-lg border border-neutral-300 px-4 py-3"
-                  placeholder="홍길동"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="contact" className="block text-sm font-medium text-neutral-700 mb-1">
-                  연락처(이메일 또는 전화)
-                </label>
-                <input
-                  id="contact"
-                  type="text"
-                  className="w-full rounded-lg border border-neutral-300 px-4 py-3"
-                  placeholder="010-1234-5678 / brand@company.com"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="adType" className="block text-sm font-medium text-neutral-700 mb-1">
-                  광고 유형
-                </label>
-                <select id="adType" className="w-full rounded-lg border border-neutral-300 px-4 py-3">
-                  <option>컵홀더 광고</option>
-                  <option>배달박스 광고</option>
-                  <option>포장봉투 광고</option>
-                  <option>기타(자유기재)</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="budget" className="block text-sm font-medium text-neutral-700 mb-1">
-                  예상 예산
-                </label>
-                <select id="budget" className="w-full rounded-lg border border-neutral-300 px-4 py-3">
-                  <option>50만원 미만</option>
-                  <option>50만 ~ 200만원</option>
-                  <option>200만 ~ 500만원</option>
-                  <option>500만원 이상</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="area" className="block text-sm font-medium text-neutral-700 mb-1">
-                  광고 지역
-                </label>
-                <input
-                  id="area"
-                  type="text"
-                  className="w-full rounded-lg border border-neutral-300 px-4 py-3"
-                  placeholder="예) 서울 강남구 / 경기 성남시 / 전국"
-                />
-              </div>
-              <div>
-                <label htmlFor="period" className="block text-sm font-medium text-neutral-700 mb-1">
-                  광고 기간
-                </label>
-                <select id="period" className="w-full rounded-lg border border-neutral-300 px-4 py-3">
-                  <option>1주</option>
-                  <option>2주</option>
-                  <option>1개월</option>
-                  <option>3개월</option>
-                  <option>6개월 이상</option>
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label htmlFor="request" className="block text-sm font-medium text-neutral-700 mb-1">
-                  요청사항
-                </label>
-                <textarea
-                  id="request"
-                  className="w-full rounded-lg border border-neutral-300 px-4 py-3 min-h-[120px]"
-                  placeholder="예) 신제품 런칭 홍보, 20~30대 직장인 타겟, 강남/서초 위주 노출"
-                ></textarea>
-              </div>
-              <div className="md:col-span-2 flex items-center gap-2 text-sm text-neutral-600">
-                <input id="agree" type="checkbox" className="h-4 w-4" required />
-                <label htmlFor="agree">개인정보 수집 및 이용에 동의합니다. (필수)</label>
-              </div>
-              <div className="md:col-span-2">
-                <button
-                  type="submit"
-                  className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700"
-                >
-                  견적 문의하기
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
       </main>
 
       {/* ================= FOOTER ================= */}
       <footer className="bg-neutral-100">
         <div className="mx-auto max-w-[1100px] px-6 lg:px-12 py-12">
           <ul className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm font-medium text-neutral-700 reveal">
-            <li>
-              <a href="#" className="hover:underline">
-                유튜브
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                네이버 블로그
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                카카오 채널
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                인스타그램
-              </a>
-            </li>
+            <li><a href="#" className="hover:underline">유튜브</a></li>
+            <li><a href="#" className="hover:underline">네이버 블로그</a></li>
+            <li><a href="#" className="hover:underline">카카오 채널</a></li>
+            <li><a href="#" className="hover:underline">인스타그램</a></li>
           </ul>
           <div className="mt-6 space-y-2 text-sm leading-relaxed text-neutral-500 reveal">
             <p>Copyright © With FoM Inc.</p>
@@ -742,26 +607,10 @@ export default function Page() {
             <p>주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) | 전화 문의 031-935-5715</p>
           </div>
           <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-neutral-600 reveal">
-            <li>
-              <a href="#" className="hover:underline">
-                개인정보처리방침
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                이용약관
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                광고 운영정책
-              </a>
-            </li>
-            <li>
-              <a href="#" className="hover:underline">
-                상품판매 운영정책
-              </a>
-            </li>
+            <li><a href="#" className="hover:underline">개인정보처리방침</a></li>
+            <li><a href="#" className="hover:underline">이용약관</a></li>
+            <li><a href="#" className="hover:underline">광고 운영정책</a></li>
+            <li><a href="#" className="hover:underline">상품판매 운영정책</a></li>
           </ul>
         </div>
       </footer>

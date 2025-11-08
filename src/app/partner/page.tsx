@@ -1,417 +1,434 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 
-/* ===== (공통 이펙트용) ===== */
-const AUTOPLAY_INTERVAL = 5000;
+/* =========================================
+   공통 타입/더미 데이터
+========================================= */
+type OrderKPI = {
+  label: string;
+  value: number | string;
+  hint?: string;
+  tone?: 'ok' | 'warn' | 'bad' | 'info';
+};
+type Section = {
+  title: string;
+  items: OrderKPI[];
+};
 
-export default function Page() {
-  /* ========= 헤더/모바일 메뉴 ========= */
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAdMenuOpen, setIsAdMenuOpen] = useState(false);
-  const [isCommOpen, setIsCommOpen] = useState(false);
-  const toggleMenu = () => setIsMenuOpen(v => !v);
-  const closeMenu = () => { setIsMenuOpen(false); setIsAdMenuOpen(false); setIsCommOpen(false); };
+const TODAY_KPIS: Section[] = [
+  {
+    title: '주문·배송',
+    items: [
+      { label: '신규주문', value: 0, tone: 'info' },
+      { label: '배송준비', value: 2, tone: 'warn' },
+      { label: '배송중', value: 2, tone: 'info' },
+      { label: '배송완료', value: 2, tone: 'ok' },
+      { label: '구매확정', value: 0, tone: 'info' },
+    ],
+  },
+  {
+    title: '정산',
+    items: [
+      { label: '오늘정산', value: '0원', tone: 'info' },
+      { label: '정산예정', value: '0원', hint: '익영업일', tone: 'info' },
+      { label: '누적정산', value: '7,235원', tone: 'ok' },
+    ],
+  },
+];
 
-  useEffect(() => {
-    document.body.style.overflow = isMenuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [isMenuOpen]);
+const ISSUE_KPIS: Section[] = [
+  {
+    title: '취소·반품·교환',
+    items: [
+      { label: '취소요청', value: 0, tone: 'ok' },
+      { label: '반품요청', value: 0, tone: 'ok' },
+      { label: '교환요청', value: 0, tone: 'ok' },
+    ],
+  },
+  {
+    title: '판매지연',
+    items: [
+      { label: '발송지연', value: 0, tone: 'ok' },
+      { label: '취소지연', value: 0, tone: 'ok' },
+      { label: '반품지연', value: 0, tone: 'ok' },
+      { label: '교환지연', value: 0, tone: 'ok' },
+    ],
+  },
+  {
+    title: '미답변 문의',
+    items: [
+      { label: '상품 Q&A', value: 0, tone: 'ok' },
+      { label: '주문고객문의', value: 0, tone: 'ok' },
+      { label: '톡톡문의', value: 0, tone: 'ok' },
+    ],
+  },
+  {
+    title: '리뷰 현황',
+    items: [
+      { label: '새로 작성된 리뷰', value: 0, tone: 'info' },
+      { label: '평점 낮은 리뷰', value: 0, tone: 'ok' },
+      { label: '발표 예정 리뷰 이벤트', value: 0, tone: 'info' },
+    ],
+  },
+];
 
-  /* ========= 파트너 입력 폼 상태/규정 ========= */
-  const MC_MIN = 2, MC_MAX = 5;       // 주 고객층
-  const AREA_MIN = 2, AREA_MAX = 4;   // 주변 상권
-  const AGE_MIN = 1, AGE_MAX = 3;     // 연령대(최대 3개 선택)
+const PRODUCTS_KPIS: Section[] = [
+  {
+    title: '상품',
+    items: [
+      { label: '판매중 상품', value: 4, tone: 'info' },
+      { label: '품절 상품', value: 3, tone: 'warn' },
+      { label: '수정요청 상품', value: 0, tone: 'ok' },
+    ],
+  },
+  {
+    title: '판매자 등급',
+    items: [
+      { label: '11월 판매자 등급', value: '씨앗', tone: 'info' },
+      { label: '11월 서비스 기준', value: '만족', tone: 'ok' },
+    ],
+  },
+];
 
-  const CUSTOMER_OPTIONS = [
-    '직장인','대학생','고등학생','중학생','초등(보호자)',
-    '커플','프리랜서','가족/학부모','여행객','외국인','노인층'
-  ];
-  const AREA_OPTIONS = ['주거','오피스','상가','학교','관광지','역세권'];
+const RECENT_ORDERS = [
+  { id: 'W20251107-00012', buyer: '홍*동', item: '브랜딩 컵홀더(2,000매)', price: 129000, status: '배송준비', date: '11-07 14:20' },
+  { id: 'W20251107-00009', buyer: '김*수', item: '마케팅 컵홀더(5,000매)', price: 279000, status: '배송완료', date: '11-07 10:12' },
+  { id: 'W20251106-00088', buyer: '박*진', item: '배달박스 광고(1set)', price: 99000, status: '구매확정', date: '11-06 18:40' },
+];
 
-  // ✅ 추가: 연령대 옵션
-  const AGE_OPTIONS = ['10~20대', '20~30대', '30~40대', '40~50대', '50대 이상'];
+const SALES_TODAY = { goal: 500000, value: 7235 };
 
-  const [inputs, setInputs] = useState({
-    cupHolderType: 'full' as 'full' | 'mix',
-    mainCustomerTypes: [] as string[],
-    areaTypes: [] as string[],
-    ageGroups: [] as string[],          // ✅ 추가
-    avgDrinkPrice: 5000,
-    dailyTakeout: 500,
-  });
+/* =========================================
+   유틸/작은 컴포넌트
+========================================= */
+const toneClass = (tone?: OrderKPI['tone']) =>
+  ({
+    ok: 'text-emerald-600 border-emerald-200 bg-emerald-50',
+    warn: 'text-amber-600 border-amber-200 bg-amber-50',
+    bad: 'text-rose-600 border-rose-200 bg-rose-50',
+    info: 'text-neutral-700 border-neutral-200 bg-white',
+  }[tone || 'info']);
 
-  // 체크박스 핸들러(최대치 도달 시 추가 선택 차단)
-  const toggleInArray = (
-    group: 'mainCustomerTypes' | 'areaTypes' | 'ageGroups', // ✅ 확장
-    item: string,
-    max: number
-  ) => {
-    setInputs(prev => {
-      const cur = prev[group] as string[];
-      const selected = cur.includes(item);
-      if (selected) {
-        return { ...prev, [group]: cur.filter(v => v !== item) };
-      } else {
-        if (cur.length >= max) return prev; // 더 이상 추가 불가
-        return { ...prev, [group]: [...cur, item] };
-      }
-    });
-  };
+function SectionCard({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <header className="px-4 md:px-6 py-3 border-b border-neutral-100 flex items-center justify-between">
+        <h3 className="text-[15px] md:text-base font-semibold text-neutral-900">{title}</h3>
+        {right}
+      </header>
+      <div className="p-4 md:p-6">{children}</div>
+    </section>
+  );
+}
 
-  const mcCount = inputs.mainCustomerTypes.length;
-  const areaCount = inputs.areaTypes.length;
-  const ageCount = inputs.ageGroups.length; // ✅ 추가
+function KPIList({ items }: { items: OrderKPI[] }) {
+  return (
+    <ul className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      {items.map((k) => (
+        <li
+          key={k.label}
+          className={`rounded-xl border px-3 py-3 flex items-center justify-between ${toneClass(k.tone)}`}
+        >
+          <div className="text-sm text-neutral-600">{k.label}</div>
+          <div className="text-base md:text-lg font-extrabold">{k.value}</div>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
-  const isMcDisabled = (opt: string) =>
-    !inputs.mainCustomerTypes.includes(opt) && mcCount >= MC_MAX;
+function Badge({ children, tone = 'info' as OrderKPI['tone'] }) {
+  const cls =
+    tone === 'ok'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : tone === 'warn'
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : tone === 'bad'
+      ? 'bg-rose-50 text-rose-700 border-rose-200'
+      : 'bg-neutral-50 text-neutral-700 border-neutral-200';
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${cls}`}>{children}</span>;
+}
 
-  const isAreaDisabled = (opt: string) =>
-    !inputs.areaTypes.includes(opt) && areaCount >= AREA_MAX;
+function ProgressBar({ value, max }: { value: number; max: number }) {
+  const pct = Math.min(100, Math.round((value / max) * 100));
+  return (
+    <div className="w-full h-3 rounded-full bg-neutral-100 overflow-hidden">
+      <div
+        className="h-full bg-blue-600"
+        style={{ width: `${pct}%` }}
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        role="progressbar"
+      />
+    </div>
+  );
+}
 
-  const isAgeDisabled = (opt: string) => // ✅ 추가
-    !inputs.ageGroups.includes(opt) && ageCount >= AGE_MAX;
-
-  // 숫자 보정
-  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-  const snap500 = (n: number) => Math.round(n / 500) * 500;
-
-  const onBlurPrice = () => {
-    setInputs(p => {
-      const v = Number.isFinite(p.avgDrinkPrice) ? p.avgDrinkPrice : 0;
-      return { ...p, avgDrinkPrice: clamp(snap500(v), 1000, 20000) };
-    });
-  };
-  const onBlurTakeout = () => {
-    setInputs(p => {
-      const v = Math.round(Number.isFinite(p.dailyTakeout) ? p.dailyTakeout : 0);
-      return { ...p, dailyTakeout: clamp(v, 1, 2000) };
-    });
-  };
-
-  // 제출 검증(최소 개수/필수값)
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputs.cupHolderType) { alert('컵홀더 유형을 선택해 주세요.'); return; }
-    if (ageCount < AGE_MIN) { alert(`연령대는 최소 ${AGE_MIN}개 선택해야 합니다. (최대 ${AGE_MAX}개)`); return; } // ✅ 추가
-    if (mcCount < MC_MIN) { alert(`주 고객층은 최소 ${MC_MIN}개 선택해야 합니다.`); return; }
-    if (areaCount < AREA_MIN) { alert(`주변 상권은 최소 ${AREA_MIN}개 선택해야 합니다.`); return; }
-    if (inputs.avgDrinkPrice < 1000 || inputs.avgDrinkPrice > 20000) { alert('음료 평균가는 1,000~20,000원입니다.'); return; }
-    if (inputs.dailyTakeout < 1 || inputs.dailyTakeout > 2000) { alert('일일 테이크아웃은 1~2000입니다.'); return; }
-
-    // TODO: 실제 API 전송
-    alert('상권/운영 정보가 제출되었습니다.');
-    console.log('SUBMIT', inputs);
-  };
+/* =========================================
+   페이지
+========================================= */
+export default function PartnerDashboard() {
+  const [range, setRange] = useState<'today' | '7d' | '30d'>('today');
+  const salesPct = useMemo(() => Math.min(100, Math.round((SALES_TODAY.value / SALES_TODAY.goal) * 100)), []);
 
   return (
-    <>
-      {/* 전역 보조 스타일 */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-          a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-            outline: 2px solid #3b82f6; outline-offset: 2px;
-          }
-        `
-        }}
-      />
-
-      {/* 스킵 링크 */}
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-white px-3 py-2 rounded shadow">본문 바로가기</a>
-
-      {/* ===== HEADER ===== */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur border-b border-neutral-200">
-        <div className="mx-auto max-w-[1600px] px-6 lg:px-12 h-[72px] flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <a href="/" className="flex items-center gap-3" aria-label="위드폼 홈으로">
-              <img src="/assets/images/logo/withfom-logo-horizontal.png" alt="위드폼 With FoM 로고" className="h-[40px] md:h-[56px] w-auto" />
-            </a>
-
-            {/* 데스크톱 내비(간단 표기) */}
-            <nav className="hidden md:flex items-center gap-6 text-neutral-800">
-              <a href="#" className="py-2 font-semibold hover:text-blue-600">광고매체</a>
-              <a href="/guide" className="py-2 font-semibold hover:text-blue-600">이용가이드</a>
-              <a href="#" className="py-2 font-semibold hover:text-blue-600">커뮤니티</a>
-            </nav>
-          </div>
-
+    <main className="min-h-dvh bg-neutral-50">
+      {/* 고정 헤더(WithFoM 공통 규격) */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/90 backdrop-blur border-b border-neutral-200">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-12 h-[72px] flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a href="#estimate" className="hidden md:inline-flex bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">시작하기</a>
-            <a href="/partner/login" className="hidden md:inline-flex bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold">파트너사 페이지</a>
-
-            {/* 모바일 햄버거 */}
-            <button
-              onClick={toggleMenu}
-              className="md:hidden p-2 rounded-md text-neutral-600 hover:bg-neutral-100"
-              aria-label="메뉴 열기/닫기"
-              aria-expanded={isMenuOpen}
-              aria-controls="mobileMenuPanel"
+            <Link href="/" className="flex items-center gap-3">
+              <img
+                src="/assets/images/logo/withfom-logo-horizontal.png"
+                alt="WithFom"
+                className="h-[40px] md:h-[48px] w-auto"
+              />
+            </Link>
+            <div className="hidden md:flex items-center gap-6 text-sm">
+              <Link href="/partner/dashboard" className="font-semibold text-neutral-900">
+                파트너 대시보드
+              </Link>
+              <Link href="/partner/orders" className="text-neutral-600 hover:text-neutral-900">
+                주문관리
+              </Link>
+              <Link href="/partner/products" className="text-neutral-600 hover:text-neutral-900">
+                상품관리
+              </Link>
+              <Link href="/partner/settlement" className="text-neutral-600 hover:text-neutral-900">
+                정산
+              </Link>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="hidden md:inline text-sm text-neutral-500">villadeblanc</span>
+            <Link
+              href="/logout"
+              className="px-3 py-2 rounded-md border border-neutral-300 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={isMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16m-7 6h7"} />
-              </svg>
-            </button>
+              로그아웃
+            </Link>
           </div>
         </div>
       </header>
       <div className="h-[72px]" />
 
-      {/* 모바일 메뉴 */}
-      <div className={`fixed inset-0 top-[72px] bg-black/40 z-[65] md:hidden transition-opacity duration-300 ${isMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={closeMenu} />
-      <div
-        id="mobileMenuPanel"
-        className={`fixed inset-0 top-[72px] bg-white z-[70] md:hidden overflow-y-auto transition-transform duration-300 ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
-        role="dialog" aria-modal="true" aria-label="모바일 메뉴"
-      >
-        <div className="p-6">
-          <nav className="flex flex-col gap-1 text-lg font-semibold text-neutral-900 border-b border-neutral-200 pb-4">
-            <div className="border-b border-neutral-100">
-              <button onClick={() => setIsAdMenuOpen(v => !v)} className="flex justify-between items-center w-full py-3 hover:text-blue-600" aria-expanded={isAdMenuOpen}>
-                광고매체
-                <span className={`transition-transform ${isAdMenuOpen ? 'rotate-90' : 'rotate-0'}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                </span>
-              </button>
-              <div className="overflow-hidden transition-[max-height,opacity] duration-300" style={{ maxHeight: isAdMenuOpen ? '500px' : 0, opacity: isAdMenuOpen ? 1 : 0 }}>
-                <div className="space-y-1 pt-2">
-                  <a href="#form" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">컵홀더 광고</a>
-                  <a href="/delivery.html" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">배달박스 광고</a>
-                  <a href="/bag.html" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">포장봉투 광고</a>
-                </div>
+      <div className="mx-auto max-w-[1400px] px-4 md:px-6 lg:px-12 py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px,1fr] gap-6 md:gap-8">
+          {/* 사이드바 */}
+          <aside className="rounded-2xl border border-neutral-200 bg-white shadow-sm h-fit sticky top-[96px]">
+            <div className="p-5 border-b border-neutral-100 flex items-center gap-3">
+              <img
+                src="/assets/images/ads/holder1.png"
+                className="w-12 h-12 rounded-xl object-cover"
+                alt=""
+              />
+              <div>
+                <div className="text-[15px] font-semibold text-neutral-900">빌라드블랑</div>
+                <div className="text-xs text-neutral-500">통합 매니저</div>
+              </div>
+            </div>
+            <nav className="p-2">
+              {[
+                ['대시보드', '/partner/dashboard'],
+                ['주문관리', '/partner/orders'],
+                ['배송/정산', '/partner/settlement'],
+                ['상품관리', '/partner/products'],
+                ['리뷰/문의', '/partner/reviews'],
+                ['혜택·마케팅', '/partner/marketing'],
+                ['데이터분석', '/partner/analytics'],
+                ['광고관리', '/partner/ads'],
+                ['프로모션', '/partner/promotion'],
+                ['설정', '/partner/settings'],
+              ].map(([label, href]) => (
+                <Link
+                  key={label}
+                  href={href}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-[15px] text-neutral-700 hover:bg-neutral-50"
+                >
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-neutral-300" />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </nav>
+          </aside>
+
+          {/* 메인 */}
+          <div className="space-y-6 md:space-y-8">
+            {/* 상단 헤드라인 + 범위 */}
+            <div className="flex items-start md:items-center justify-between flex-col md:flex-row gap-3">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-neutral-900">파트너 대시보드</h1>
+                <p className="text-sm text-neutral-500 mt-1">
+                  오늘 현황과 이슈를 한 눈에 확인하고 처리하세요.
+                </p>
+              </div>
+              <div className="rounded-xl border border-neutral-200 bg-white flex items-center">
+                {(['today', '7d', '30d'] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRange(r)}
+                    className={`px-3 md:px-4 py-2 text-sm rounded-xl ${
+                      range === r ? 'bg-neutral-900 text-white' : 'text-neutral-700 hover:bg-neutral-50'
+                    }`}
+                  >
+                    {r === 'today' ? '오늘' : r === '7d' ? '최근 7일' : '최근 30일'}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <a href="/guide" onClick={closeMenu} className="py-3 hover:text-blue-600 border-b border-neutral-100">이용가이드</a>
+            {/* 상단 KPI 그리드 */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {TODAY_KPIS.map((sec) => (
+                <SectionCard
+                  key={sec.title}
+                  title={sec.title}
+                  right={<Badge tone="info">최근 업데이트</Badge>}
+                >
+                  <KPIList items={sec.items} />
+                  {sec.title === '주문·배송' && (
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-neutral-500">
+                      <div>오늘출발 <b className="text-neutral-900">0</b></div>
+                      <div>예약구매 <b className="text-neutral-900">0</b></div>
+                      <div>정기구독 <b className="text-neutral-900">0</b></div>
+                      <div>도착보장 <b className="text-neutral-900">0</b></div>
+                    </div>
+                  )}
+                  {sec.title === '정산' && (
+                    <div className="mt-5">
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <span className="text-neutral-700">금일 매출 달성도</span>
+                        <span className="font-semibold">{salesPct}%</span>
+                      </div>
+                      <ProgressBar value={SALES_TODAY.value} max={SALES_TODAY.goal} />
+                      <div className="mt-1 text-xs text-neutral-500">
+                        목표 {SALES_TODAY.goal.toLocaleString()}원 / 현재 {SALES_TODAY.value.toLocaleString()}원
+                      </div>
+                    </div>
+                  )}
+                </SectionCard>
+              ))}
+            </div>
 
-            <div className="border-b border-neutral-100">
-              <button onClick={() => setIsCommOpen(v => !v)} className="flex justify-between items-center w-full py-3 hover:text-blue-600" aria-expanded={isCommOpen}>
-                커뮤니티
-                <span className={`transition-transform ${isCommOpen ? 'rotate-90' : 'rotate-0'}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                </span>
-              </button>
-              <div className="overflow-hidden transition-[max-height,opacity] duration-300" style={{ maxHeight: isCommOpen ? '500px' : 0, opacity: isCommOpen ? 1 : 0 }}>
-                <div className="space-y-1 pt-2">
-                  <a href="#" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">공지사항</a>
-                  <a href="#" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">Q&amp;A</a>
-                  <a href="#" onClick={closeMenu} className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100">EVENT</a>
+            {/* 이슈/문의/리뷰 섹션 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+              {ISSUE_KPIS.map((sec) => (
+                <SectionCard key={sec.title} title={sec.title}>
+                  <ul className="space-y-2">
+                    {sec.items.map((it) => (
+                      <li key={it.label} className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2">
+                        <span className="text-sm text-neutral-700">{it.label}</span>
+                        <Badge tone={it.tone}>{it.value}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </SectionCard>
+              ))}
+            </div>
+
+            {/* 주문 테이블 + 상품/등급 */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <SectionCard
+                title="최근 주문"
+                right={
+                  <Link href="/partner/orders" className="text-sm text-blue-600 hover:underline">
+                    더보기
+                  </Link>
+                }
+              >
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-neutral-500 border-b">
+                        <th className="py-2 pr-2">주문번호</th>
+                        <th className="py-2 pr-2">구매자</th>
+                        <th className="py-2 pr-2">상품</th>
+                        <th className="py-2 pr-2 text-right">금액</th>
+                        <th className="py-2 pr-2">상태</th>
+                        <th className="py-2">일시</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {RECENT_ORDERS.map((o) => (
+                        <tr key={o.id} className="border-b last:border-0">
+                          <td className="py-2 pr-2 font-medium text-neutral-900">{o.id}</td>
+                          <td className="py-2 pr-2">{o.buyer}</td>
+                          <td className="py-2 pr-2">{o.item}</td>
+                          <td className="py-2 pr-2 text-right">{o.price.toLocaleString()}원</td>
+                          <td className="py-2 pr-2">
+                            <Badge tone={o.status === '배송준비' ? 'warn' : o.status === '배송완료' ? 'ok' : 'info'}>
+                              {o.status}
+                            </Badge>
+                          </td>
+                          <td className="py-2">{o.date}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+              </SectionCard>
+
+              <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {PRODUCTS_KPIS.map((sec) => (
+                  <SectionCard
+                    key={sec.title}
+                    title={sec.title}
+                    right={
+                      <Link href={sec.title === '상품' ? '/partner/products' : '/partner/settlement'} className="text-sm text-blue-600 hover:underline">
+                        관리하기
+                      </Link>
+                    }
+                  >
+                    <div className="grid grid-cols-1 gap-3">
+                      {sec.items.map((it) => (
+                        <div key={it.label} className="flex items-center justify-between rounded-xl border border-neutral-200 px-3 py-3">
+                          <div className="text-sm text-neutral-700">{it.label}</div>
+                          <div className="text-base font-extrabold text-neutral-900">{it.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                ))}
+
+                <SectionCard title="판매 성과 (금일)">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-neutral-200 p-4">
+                      <div className="text-sm text-neutral-600">주문건수</div>
+                      <div className="mt-2 text-2xl font-extrabold">0</div>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 p-4">
+                      <div className="text-sm text-neutral-600">매출액</div>
+                      <div className="mt-2 text-2xl font-extrabold">{SALES_TODAY.value.toLocaleString()}원</div>
+                    </div>
+                  </div>
+                </SectionCard>
               </div>
             </div>
-          </nav>
 
-          <div className="mt-6 flex flex-col gap-4">
-            <a href="#form" onClick={closeMenu} className="text-center bg-blue-600 text-white px-4 py-3 rounded-md hover:bg-blue-700 font-bold">지금 바로 시작하기</a>
-            <a href="/partner/login" onClick={closeMenu} className="text-center bg-neutral-800 text-white px-4 py-3 rounded-md hover:bg-neutral-900 font-bold">파트너사 페이지</a>
+            {/* 하단 도움말 */}
+            <div className="rounded-2xl border border-neutral-200 bg-white p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center md:justify-between gap-3">
+              <div>
+                <div className="text-[15px] font-semibold text-neutral-900">무엇을 도와드릴까요?</div>
+                <p className="text-sm text-neutral-500 mt-1">자주 묻는 질문, 공지사항, 채팅 상담으로 빠르게 해결하세요.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href="/partner/help/faq" className="px-3 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50">
+                  FAQ
+                </Link>
+                <Link href="/partner/notice" className="px-3 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50">
+                  공지사항
+                </Link>
+                <Link href="/partner/support" className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+                  1:1 문의
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* ===== 메인 폼 ===== */}
-      <main id="main" className="min-h-screen bg-neutral-100 px-6 md:px-10 py-10 text-neutral-900">
-        <div id="form" className="mx-auto max-w-4xl bg-white rounded-2xl shadow-lg border border-neutral-200">
-          <header className="p-6 md:p-8 border-b border-neutral-200">
-            <h1 className="text-2xl md:text-3xl font-extrabold">파트너사 상권/운영 정보 입력</h1>
-            <p className="mt-2 text-neutral-600">광고 집행 요건 충족을 위한 필수 정보를 입력해 주세요.</p>
-          </header>
-
-          <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
-            <h2 className="text-lg md:text-xl font-bold">A) 상권·운영 입력 요건</h2>
-
-            {/* 카드(2컬럼: 항목 / 형식) */}
-            <div className="rounded-xl overflow-hidden border border-neutral-200">
-              {/* 헤더 */}
-              <div className="grid grid-cols-[150px_1.5fr] text-sm font-semibold bg-neutral-50 text-neutral-900 border-b border-neutral-200">
-                <div className="p-3 border-r border-neutral-200">항목</div>
-                <div className="p-3">형식 (클릭/입력)</div>
-              </div>
-
-              {/* 컵홀더 유형 */}
-              <div className="grid grid-cols-[150px_1.5fr] items-center text-sm border-b border-neutral-200">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">컵홀더 유형</div>
-                <div className="p-3">
-                  <label className="mr-6 inline-flex items-center gap-2 select-none text-neutral-900">
-                    <input
-                      type="radio"
-                      name="cupHolderType"
-                      value="full"
-                      checked={inputs.cupHolderType === 'full'}
-                      onChange={(e) => setInputs(p => ({ ...p, cupHolderType: e.target.value as 'full' }))}
-                      className="h-4 w-4 accent-blue-600"
-                    />
-                    전체형
-                  </label>
-                  <label className="inline-flex items-center gap-2 select-none text-neutral-900">
-                    <input
-                      type="radio"
-                      name="cupHolderType"
-                      value="mix"
-                      checked={inputs.cupHolderType === 'mix'}
-                      onChange={(e) => setInputs(p => ({ ...p, cupHolderType: e.target.value as 'mix' }))}
-                      className="h-4 w-4 accent-blue-600"
-                    />
-                    믹스형
-                  </label>
-                </div>
-              </div>
-
-              {/* ✅ 고객 구성(연령대 선택 UI) */}
-              <div className="grid grid-cols-[150px_1.5fr] items-start text-sm border-b border-neutral-200">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">고객 구성</div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {AGE_OPTIONS.map(opt => (
-                      <label key={opt} className={`inline-flex items-center gap-2 select-none ${isAgeDisabled(opt) ? 'opacity-50' : ''}`}>
-                        <input
-                          type="checkbox"
-                          value={opt}
-                          checked={inputs.ageGroups.includes(opt)}
-                          onChange={() => toggleInArray('ageGroups', opt, AGE_MAX)}
-                          disabled={isAgeDisabled(opt)}
-                          className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
-                        />
-                        <span className="text-neutral-900">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">선택 {ageCount}/{AGE_MAX} (최소 {AGE_MIN}개, 최대 {AGE_MAX}개 선택)</p>
-                </div>
-              </div>
-
-              {/* 주 고객층 */}
-              <div className="grid grid-cols-[150px_1.5fr] items-start text-sm border-b border-neutral-200">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">주 고객층</div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {CUSTOMER_OPTIONS.map(opt => (
-                      <label key={opt} className={`inline-flex items-center gap-2 select-none ${isMcDisabled(opt) ? 'opacity-50' : ''}`}>
-                        <input
-                          type="checkbox"
-                          value={opt}
-                          checked={inputs.mainCustomerTypes.includes(opt)}
-                          onChange={() => toggleInArray('mainCustomerTypes', opt, MC_MAX)}
-                          disabled={isMcDisabled(opt)}
-                          className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
-                        />
-                        <span className="text-neutral-900">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">선택 {mcCount}/{MC_MAX} (최소 {MC_MIN}개 필요)</p>
-                </div>
-              </div>
-
-              {/* 주변 상권 */}
-              <div className="grid grid-cols-[150px_1.5fr] items-start text-sm border-b border-neutral-200">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">주변 상권</div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {AREA_OPTIONS.map(opt => (
-                      <label key={opt} className={`inline-flex items-center gap-2 select-none ${isAreaDisabled(opt) ? 'opacity-50' : ''}`}>
-                        <input
-                          type="checkbox"
-                          value={opt}
-                          checked={inputs.areaTypes.includes(opt)}
-                          onChange={() => toggleInArray('areaTypes', opt, AREA_MAX)}
-                          disabled={isAreaDisabled(opt)}
-                          className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
-                        />
-                        <span className="text-neutral-900">{opt}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">선택 {areaCount}/{AREA_MAX} (최소 {AREA_MIN}개 필요)</p>
-                </div>
-              </div>
-
-              {/* 음료 평균가 */}
-              <div className="grid grid-cols-[150px_1.5fr] items-center text-sm border-b border-neutral-200">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">음료 평균가</div>
-                <div className="p-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1000}
-                      max={20000}
-                      step={500}
-                      value={inputs.avgDrinkPrice}
-                      onChange={(e) => setInputs(p => ({ ...p, avgDrinkPrice: Number(e.target.value) }))}
-                      onBlur={onBlurPrice}
-                      className="w-full md:w-60 rounded-lg border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-neutral-900 placeholder-neutral-400"
-                      placeholder="예) 5000"
-                    />
-                    <span className="text-neutral-700">원</span>
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">1,000~20,000 / 500원 단위</p>
-                </div>
-              </div>
-
-              {/* 일일 테이크아웃 */}
-              <div className="grid grid-cols-[150px_1.5fr] items-center text-sm">
-                <div className="p-3 bg-neutral-50 font-semibold text-neutral-900 border-r border-neutral-200">일일 테이크아웃</div>
-                <div className="p-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={2000}
-                      value={inputs.dailyTakeout}
-                      onChange={(e) => setInputs(p => ({ ...p, dailyTakeout: Number(e.target.value) }))}
-                      onBlur={onBlurTakeout}
-                      className="w-full md:w-60 rounded-lg border border-neutral-300 px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-neutral-900 placeholder-neutral-400"
-                      placeholder="예) 500"
-                    />
-                    <span className="text-neutral-700">잔/일</span>
-                  </div>
-                  <p className="mt-2 text-xs text-neutral-500">1~2000 정수</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 제출 */}
-            <div className="pt-2">
-              <button type="submit" className="w-full md:w-auto px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                파트너 정보 제출
-              </button>
-            </div>
-          </form>
-        </div>
-      </main>
-
-      {/* ===== FOOTER ===== */}
-      <footer className="bg-neutral-100">
-        <div className="mx-auto max-w-[1100px] px-6 lg:px-12 py-12">
-          <ul className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm font-medium text-neutral-700">
-            <li><a href="#" className="hover:underline">유튜브</a></li>
-            <li><a href="#" className="hover:underline">네이버 블로그</a></li>
-            <li><a href="#" className="hover:underline">카카오 채널</a></li>
-            <li><a href="#" className="hover:underline">인스타그램</a></li>
-          </ul>
-          <div className="mt-6 space-y-2 text-sm leading-relaxed text-neutral-600">
-            <p>Copyright © With FoM Inc.</p>
-            <p>(주)퍼스트오브메이 | 대표 김은수 | 사업자등록번호 000-00-00000 | 통신판매업신고번호 0000-경기파주-0000 | 호스팅 사업자 AWS</p>
-            <p>주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) | 전화 031-935-5715</p>
-          </div>
-          <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-neutral-600">
-            <li><a href="#" className="hover:underline">개인정보처리방침</a></li>
-            <li><a href="#" className="hover:underline">이용약관</a></li>
-            <li><a href="#" className="hover:underline">광고 운영정책</a></li>
-            <li><a href="#" className="hover:underline">상품판매 운영정책</a></li>
-          </ul>
-        </div>
-      </footer>
-
-      {/* 플로팅 챗봇 버튼 */}
-      <button id="chatbotBtn" className="fixed bottom-6 right-6 z-[60] p-0" aria-label="챗봇 열기">
-        <img
-          src="/assets/images/icons/챗봇.png"
-          alt="챗봇"
-          className="w-[72px] h-[72px] object-contain select-none pointer-events-none transition-transform duration-200
-                     [clip-path:circle(40%)]
-                     [filter:drop-shadow(0_6px_18px_rgba(0,0,0,.25))]"
-        />
-      </button>
-    </>
+    </main>
   );
 }
