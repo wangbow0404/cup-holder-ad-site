@@ -15,18 +15,38 @@ const SLIDE_DESCS = [
 const AUTOPLAY_INTERVAL = 5000;
 
 /* ================================
-   페이지 컴포넌트
+   프로모 스트립 데이터 (룰렛)
 =================================== */
+const PROMO_ITEMS = [
+  {
+    icon: '/assets/images/icons/envelope-won.png', // 없으면 이모지 사용됨
+    textPrefix: '홈페이지를 방문해주신 모든분들께',
+    highlight: '게임하고 특별한 선물받아가기',
+    href: '/promo',
+  },
+  {
+    icon: '/assets/images/icons/gift.png',
+    textPrefix: '신규 파트너 웰컴',
+    highlight: '사이즈업 쿠폰팩 증정',
+    href: '/welcome',
+  },
+];
+
 export default function Page() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const slidesLength = SLIDE_TITLES.length;
-  // 브라우저/Node 환경 호환 안전 타입
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 모바일 메뉴
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAdMenuOpen, setIsAdMenuOpen] = useState(false);
   const [isCommOpen, setIsCommOpen] = useState(false);
+
+  // 프로모 스트립 인덱스
+  const [promoIndex, setPromoIndex] = useState(0);
+
+  // 챗봇 모달
+  const [chatOpen, setChatOpen] = useState(false);
 
   const toggleMenu = () => setIsMenuOpen((p) => !p);
   const closeMenu = () => {
@@ -53,7 +73,7 @@ export default function Page() {
   const next = useCallback(() => go(currentSlideIndex + 1), [currentSlideIndex, go]);
   const prev = useCallback(() => go(currentSlideIndex - 1), [currentSlideIndex, go]);
 
-  // 페이지 효과(리빌)
+  // 페이지 효과(리빌 + 플로팅) — 최소 수정: in-view 즉시 활성화 + delay 지원
   useEffect(() => {
     document.documentElement.style.scrollBehavior = 'auto';
     if ('scrollRestoration' in history) (history as any).scrollRestoration = 'manual';
@@ -63,28 +83,46 @@ export default function Page() {
     window.addEventListener('load', onLoad);
 
     const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
+
+    const show = (el: HTMLElement) => {
+      const delay = Number(el.dataset.delay || 0);
+      if (delay) el.style.transitionDelay = `${delay}ms`;
+      el.classList.add('active');
+    };
+
     if ('IntersectionObserver' in window) {
       const io = new IntersectionObserver(
         (entries) => {
           entries.forEach((e) => {
             if (e.isIntersecting) {
-              (e.target as HTMLElement).classList.add('active');
+              show(e.target as HTMLElement);
               io.unobserve(e.target);
             }
           });
         },
-        { threshold: 0.15 }
+        { threshold: 0.12, rootMargin: '0px 0px -8% 0px' } // 조금 더 일찍 트리거
       );
-      reveals.forEach((el) => io.observe(el));
-    } else {
-      reveals.forEach((el) => el.classList.add('active'));
-    }
-    // reduce-motion 대비 강제 활성화
-    setTimeout(() => {
-      reveals.forEach((el) => el.classList.add('active'));
-    }, 600);
 
-    return () => window.removeEventListener('load', onLoad);
+      // 초기 화면에 이미 보이는 요소는 즉시 표시
+      reveals.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const inView = r.top < (window.innerHeight || 0) * 0.9 && r.bottom > 0;
+        if (inView) show(el);
+        else io.observe(el);
+      });
+    } else {
+      reveals.forEach(show);
+    }
+
+    // reduce-motion 대비 강제 활성화
+    const t = setTimeout(() => {
+      reveals.forEach((el) => el.classList.add('active'));
+    }, 700);
+
+    return () => {
+      window.removeEventListener('load', onLoad);
+      clearTimeout(t);
+    };
   }, []);
 
   // 자동재생
@@ -108,17 +146,77 @@ export default function Page() {
   );
   const FALLBACK_IMG = '/assets/images/ads/slide4.png';
 
+  // 프로모 컨트롤
+  const nextPromo = () => setPromoIndex((i) => (i + 1) % PROMO_ITEMS.length);
+  const prevPromo = () => setPromoIndex((i) => (i - 1 + PROMO_ITEMS.length) % PROMO_ITEMS.length);
+
+  const promo = PROMO_ITEMS[promoIndex];
+
   return (
     <>
-      {/* 전역 보조 스타일 (영상 관련 셀렉터 제거됨) */}
+      {/* 전역 보조 스타일 + 리빌/플로팅 애니메이션 */}
       <style
         dangerouslySetInnerHTML={{
           __html: `
           html{scroll-behavior:smooth;}
-          .reveal{opacity:0; transform:translateY(12px); transition:opacity .5s ease, transform .5s ease;}
-          .reveal.active{opacity:1; transform:translateY(0);}
-          .parallax{will-change:transform;}
+          /* 리빌: 다양한 애니메이션 효과 */
+          .reveal{
+            opacity:0;
+            transform:translateY(16px) scale(.98);
+            filter:blur(3px);
+            transition:
+              opacity .6s cubic-bezier(.2,.6,.2,1),
+              transform .6s cubic-bezier(.2,.6,.2,1),
+              filter .6s cubic-bezier(.2,.6,.2,1);
+            will-change:transform,opacity,filter;
+          }
+          .reveal.active{opacity:1; transform:translateY(0) scale(1); filter:blur(0)}
+          
+          /* 기본 방향 애니메이션 */
+          .reveal[data-anim="left"]{transform:translateX(-30px) scale(.95); filter:blur(4px);}
+          .reveal[data-anim="left"].active{transform:translateX(0) scale(1); filter:blur(0);}
+          .reveal[data-anim="right"]{transform:translateX(30px) scale(.95); filter:blur(4px);}
+          .reveal[data-anim="right"].active{transform:translateX(0) scale(1); filter:blur(0);}
+          .reveal[data-anim="up"]{transform:translateY(30px) scale(.95); filter:blur(4px);}
+          .reveal[data-anim="up"].active{transform:translateY(0) scale(1); filter:blur(0);}
+          .reveal[data-anim="down"]{transform:translateY(-30px) scale(.95); filter:blur(4px);}
+          .reveal[data-anim="down"].active{transform:translateY(0) scale(1); filter:blur(0);}
+          
+          /* 확대/축소 애니메이션 */
+          .reveal[data-anim="scale"]{transform:scale(.7); filter:blur(5px);}
+          .reveal[data-anim="scale"].active{transform:scale(1); filter:blur(0);}
+          .reveal[data-anim="zoom-in"]{transform:scale(.5); opacity:0; filter:blur(6px);}
+          .reveal[data-anim="zoom-in"].active{transform:scale(1); opacity:1; filter:blur(0);}
+          .reveal[data-anim="zoom-out"]{transform:scale(1.3); opacity:0; filter:blur(6px);}
+          .reveal[data-anim="zoom-out"].active{transform:scale(1); opacity:1; filter:blur(0);}
+          
+          /* 회전 애니메이션 */
+          .reveal[data-anim="rotate"]{transform:rotate(-5deg) scale(.9); opacity:0; filter:blur(4px);}
+          .reveal[data-anim="rotate"].active{transform:rotate(0deg) scale(1); opacity:1; filter:blur(0);}
+          .reveal[data-anim="rotate-left"]{transform:rotate(-10deg) translateX(-20px); opacity:0; filter:blur(4px);}
+          .reveal[data-anim="rotate-left"].active{transform:rotate(0deg) translateX(0); opacity:1; filter:blur(0);}
+          .reveal[data-anim="rotate-right"]{transform:rotate(10deg) translateX(20px); opacity:0; filter:blur(4px);}
+          .reveal[data-anim="rotate-right"].active{transform:rotate(0deg) translateX(0); opacity:1; filter:blur(0);}
+          
+          /* 대각선 애니메이션 */
+          .reveal[data-anim="diagonal-left"]{transform:translate(-30px, 30px) scale(.9); opacity:0; filter:blur(4px);}
+          .reveal[data-anim="diagonal-left"].active{transform:translate(0, 0) scale(1); opacity:1; filter:blur(0);}
+          .reveal[data-anim="diagonal-right"]{transform:translate(30px, 30px) scale(.9); opacity:0; filter:blur(4px);}
+          .reveal[data-anim="diagonal-right"].active{transform:translate(0, 0) scale(1); opacity:1; filter:blur(0);}
+          
+          /* 페이드 전용 */
+          .reveal[data-anim="fade"]{opacity:0; transform:scale(1); filter:blur(0);}
+          .reveal[data-anim="fade"].active{opacity:1; transform:scale(1); filter:blur(0);}
+          
+          /* 슬라이드 + 페이드 조합 */
+          .reveal[data-anim="slide-fade-up"]{transform:translateY(40px); opacity:0; filter:blur(5px);}
+          .reveal[data-anim="slide-fade-up"].active{transform:translateY(0); opacity:1; filter:blur(0);}
+          .reveal[data-anim="slide-fade-down"]{transform:translateY(-40px); opacity:0; filter:blur(5px);}
+          .reveal[data-anim="slide-fade-down"].active{transform:translateY(0); opacity:1; filter:blur(0);}
+          .floaty{will-change:transform; animation:floaty 6s ease-in-out infinite;}
+          @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
           a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid #3b82f6; outline-offset:2px;}
+          .glass{background:rgba(255,255,255,.8); backdrop-filter:saturate(160%) blur(6px);}
         `,
         }}
       />
@@ -137,61 +235,63 @@ export default function Page() {
       >
         <div className="mx-auto max-w-[1600px] px-6 lg:px-12 h-[72px] flex items-center justify-between">
           <div className="flex items-center gap-8">
-            <a href="#hero" className="flex items-center gap-3" aria-label="위드폼 홈으로">
+            <a href="#hero" className="flex items-center gap-3 reveal" data-anim="fade" data-delay="0" aria-label="위드폼 홈으로">
               <img
                 src="/assets/images/logo/withfom-logo-horizontal.png"
                 alt="위드폼 With FoM 로고"
-                className="h-[40px] md:h-[60px] w-auto"
+                className="h-[40px] md:h-[60px] w-auto reveal"
+                data-anim="zoom-in"
+                data-delay="50"
               />
             </a>
 
             {/* 데스크톱 내비 */}
-            <nav className="hidden md:flex items-center gap-6 text-gray-800">
+            <nav className="hidden md:flex items-center gap-6 text-gray-800 reveal" data-anim="slide-fade-down" data-delay="100">
               <div className="relative group">
-                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true">
+                <button className="py-2 font-medium hover:text-blue-600 reveal" data-anim="fade" data-delay="120" aria-haspopup="true">
                   광고매체
                 </button>
                 <div className="absolute left-0 top-full mt-2 min-w-[220px] p-3 bg-white border border-neutral-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
                   <ul className="space-y-1">
                     <li>
-                      <a href="#pro-modes" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="#pro-modes" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="0" role="menuitem">
                         컵홀더 광고
                       </a>
                     </li>
                     <li>
-                      <a href="/delivery.html" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="/delivery.html" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="50" role="menuitem">
                         배달박스 광고
                       </a>
                     </li>
                     <li>
-                      <a href="/bag.html" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="/bag.html" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="100" role="menuitem">
                         포장봉투 광고
                       </a>
                     </li>
                   </ul>
                 </div>
               </div>
-              <a href="/guide" className="py-2 font-medium hover:text-blue-600">
+              <a href="/guide" className="py-2 font-medium hover:text-blue-600 reveal" data-anim="fade" data-delay="140">
                 이용가이드
               </a>
               <div className="relative group">
-                <button className="py-2 font-medium hover:text-blue-600" aria-haspopup="true">
+                <button className="py-2 font-medium hover:text-blue-600 reveal" data-anim="fade" data-delay="160" aria-haspopup="true">
                   커뮤니티
                 </button>
                 <div className="absolute left-0 top-full mt-2 min-w-[220px] p-3 bg-white border border-neutral-200 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition">
                   <ul className="space-y-1">
                     <li>
-                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="0" role="menuitem">
                         공지사항
                       </a>
                     </li>
                     <li>
-                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="50" role="menuitem">
                         Q&amp;A
                       </a>
                     </li>
                     <li>
-                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100" role="menuitem">
+                      <a href="#" className="block rounded-lg px-3 py-2 hover:bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="100" role="menuitem">
                         EVENT
                       </a>
                     </li>
@@ -202,39 +302,49 @@ export default function Page() {
           </div>
 
           {/* 우측 버튼 + 모바일 햄버거 */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 reveal" data-anim="fade" data-delay="180">
             <a
               href="/consumer/login"
               onClick={closeMenu}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold hidden md:inline-flex"
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold hidden md:inline-flex reveal"
+              data-anim="scale"
+              data-delay="200"
             >
               로그인
             </a>
             <a
               href="/partner/login"
               onClick={closeMenu}
-              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex"
+              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex reveal"
+              data-anim="zoom-in"
+              data-delay="220"
             >
               파트너사 페이지
             </a>
             <a
               href="/Advertiser/login"
               onClick={closeMenu}
-              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex"
+              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex reveal"
+              data-anim="zoom-in"
+              data-delay="240"
             >
               광고주 페이지
             </a>
             <a
               href="/Administrator/login"
               onClick={closeMenu}
-              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex"
+              className="bg-neutral-800 text-white px-4 py-2 rounded-md hover:bg-neutral-900 font-semibold hidden md:inline-flex reveal"
+              data-anim="zoom-in"
+              data-delay="260"
             >
               관리자 페이지
             </a>
 
             <button
               onClick={toggleMenu}
-              className="md:hidden p-2 rounded-md text-neutral-600 hover:bg-neutral-100"
+              className="md:hidden p-2 rounded-md text-neutral-600 hover:bg-neutral-100 reveal"
+              data-anim="rotate"
+              data-delay="200"
               aria-label="메뉴 열기/닫기"
               aria-expanded={isMenuOpen}
               aria-controls="mobileMenuPanel"
@@ -400,29 +510,83 @@ export default function Page() {
         </div>
       </div>
 
+      {/* ================= PROMO STRIP (룰렛) — 그대로 유지 ================= */}
+      <section className="relative bg-white border-b border-neutral-200 reveal" data-anim="down" data-delay="0">
+        <div className="mx-auto max-w-[1600px] px-4 md:px-6 lg:px-12">
+          <div className="relative h-[76px] md:h-[88px] flex items-center justify-center reveal" data-anim="down" data-delay="100">
+            <button
+              onClick={prevPromo}
+              className="absolute left-1 md:left-2 p-2 rounded-full hover:bg-neutral-100 text-neutral-700 reveal"
+              data-anim="rotate-left"
+              data-delay="50"
+              aria-label="이전 프로모"
+            >
+              ‹
+            </button>
+
+            <a
+              href={promo.href}
+              className="glass w-full md:w-auto max-w-[980px] rounded-full border border-neutral-200 px-4 md:px-6 py-3 flex items-center justify-center gap-3 md:gap-4 reveal"
+              data-anim="slide-fade-down"
+              data-delay="150"
+            >
+              <span className="inline-flex items-center justify-center reveal" data-anim="rotate" data-delay="200">
+                <img
+                  src="/assets/images/hero/roulette.png"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).outerHTML =
+                      '<span role="img" aria-label="roulette">🎯</span>';
+                  }}
+                  alt="룰렛"
+                  className="w-8 h-8 md:w-9 md:h-9 object-contain floaty"
+                />
+              </span>
+              <span className="text-[15px] md:text-[17px] font-semibold text-neutral-900 reveal" data-anim="fade" data-delay="250">
+                {promo.textPrefix}{' '}
+                <b className="text-orange-500 reveal" data-anim="scale" data-delay="300">{promo.highlight}</b>
+              </span>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-neutral-600 reveal" data-anim="rotate-right" data-delay="350">
+                →
+              </span>
+            </a>
+
+            <button
+              onClick={nextPromo}
+              className="absolute right-1 md:right-2 p-2 rounded-full hover:bg-neutral-100 text-neutral-700 reveal"
+              data-anim="rotate-right"
+              data-delay="50"
+              aria-label="다음 프로모"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      </section>
+
       {/* ================= MAIN ================= */}
       <main id="main" className="bg-white text-neutral-900">
-        {/* HERO */}
+        {/* HERO — 그대로 */}
         <section id="hero" className="relative min-h-[70vh] flex items-center justify-center text-center overflow-hidden">
-          {/* 포스터 이미지 (영상 제거) */}
           <img
             src="/assets/images/hero/banner.png"
             alt="위드폼 배너"
-            className="absolute inset-0 w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover reveal"
+            data-anim="zoom-out"
+            data-delay="0"
           />
-
-          <div className="absolute inset-0 bg-black/40" aria-hidden="true"></div>
-
+          <div className="absolute inset-0 bg-black/40 reveal" data-anim="fade" data-delay="100" aria-hidden="true"></div>
           <div className="relative z-10 text-white">
             <div className="mx-auto max-w-[min(92vw,960px)] text-center flex flex-col items-center">
-              <h1 className="font-extrabold tracking-tight text-[clamp(22px,5vw,46px)] leading-tight md:leading-[1.1] mb-6 reveal">
-                <span className="block">일상에 스며드는 밀착형 생활광고,</span>
-                <span className="block opacity-95">커피 한 잔이 브랜드의 첫인상이 됩니다</span>
+              <h1 className="font-extrabold tracking-tight text-[clamp(22px,5vw,46px)] leading-tight md:leading-[1.1] mb-6 reveal" data-anim="slide-fade-up" data-delay="200">
+                <span className="block reveal" data-anim="slide-fade-up" data-delay="250">일상에 스며드는 밀착형 생활광고,</span>
+                <span className="block opacity-95 reveal" data-anim="slide-fade-up" data-delay="300">커피 한 잔이 브랜드의 첫인상이 됩니다</span>
               </h1>
               <a
                 href="#ad-products"
                 onClick={closeMenu}
                 className="inline-flex mx-auto mt-2 bg-blue-600 text-white px-6 py-3 rounded-md text-lg font-semibold hover:bg-blue-700 reveal"
+                data-anim="scale"
+                data-delay="400"
               >
                 지금바로 시작하기
               </a>
@@ -430,30 +594,24 @@ export default function Page() {
           </div>
         </section>
 
-        {/* 전문가모드(슬라이더) */}
-        <section id="pro-modes" className="scroll-mt-[90px] relative mx-auto max-w-[1600px] px-6 lg:px-12 mt-24 md:mt-32 mb-16">
+        {/* 전문가모드(슬라이더) — 하단 설명/페이저/캡션만 리빌 */}
+        <section id="pro-modes" className="scroll-mt-[90px] relative mx-auto max-w-[1600px] px-6 lg:px-12 mt-24 md:mt-32 mb-16 reveal" data-anim="up" data-delay="0">
           <div className="mb-6">
-            <div className="flex items-center gap-2 reveal">
-              <h2 className="text-3xl md:text-5xl font-extrabold leading-tight text-neutral-900">컵홀더광고</h2>
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-neutral-500">
-                →
-              </span>
+            <div className="flex items-center gap-2 reveal" data-anim="diagonal-left" data-delay="20">
+              <h2 className="text-3xl md:text-5xl font-extrabold leading-tight text-neutral-900 reveal" data-anim="slide-fade-up" data-delay="40">컵홀더광고</h2>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 text-neutral-500 reveal" data-anim="rotate-right" data-delay="80">→</span>
             </div>
-            <p className="mt-3 text-neutral-600 text-[15px] md:text-base reveal">
+            <p className="mt-3 text-neutral-600 text-[15px] md:text-base reveal" data-anim="fade" data-delay="100">
               일상에 스며드는 똑똑한 생활광고를 원하시는 광고주분들에게 추천드리는 광고입니다.
             </p>
-            <div className="mt-4 flex items-center gap-2 reveal">
-              <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700">지역광고</span>
-              <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700">정밀타겟광고</span>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700 reveal" data-anim="zoom-in" data-delay="160">지역광고</span>
+              <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700 reveal" data-anim="zoom-in" data-delay="220">정밀타겟광고</span>
             </div>
           </div>
 
-          {/* 슬라이더 */}
-          <div
-            id="pmCarousel"
-            className="relative bg-neutral-100/60 rounded-3xl p-4 md:p-8 min-h-[420px] md:min-h-[460px] overflow-hidden reveal"
-            tabIndex={0}
-          >
+          {/* 슬라이더 본체는 그대로 */}
+          <div id="pmCarousel" className="relative bg-neutral-100/60 rounded-3xl p-4 md:p-8 min-h-[420px] md:min-h-[460px] overflow-hidden reveal" data-anim="up" data-delay="200">
             <button
               onClick={prev}
               className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 z-10 text-2xl text-neutral-400 hover:text-neutral-600"
@@ -473,25 +631,25 @@ export default function Page() {
               {SLIDES.map((slide, idx) => (
                 <article
                   key={idx}
-                  className={`pm-slide absolute inset-0 transition-opacity duration-500 parallax ${
+                  className={`pm-slide absolute inset-0 transition-opacity duration-500 ${
                     currentSlideIndex === idx ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                   }`}
                   data-parallax
                   data-speed={slide.speed}
                 >
-                  {/* 스켈레톤 */}
-                  <div className="absolute inset-0 bg-neutral-200 rounded-2xl" aria-hidden />
+                  <div className="absolute inset-0 bg-neutral-200 rounded-2xl reveal" data-anim="fade" data-delay={`${idx * 50}`} aria-hidden />
                   <img
                     src={slide.src}
                     alt={`컵홀더광고 ${idx + 1}`}
                     loading={idx === 0 ? 'eager' : 'lazy'}
                     onError={(e) => {
                       const img = e.currentTarget as HTMLImageElement;
-                      // 폴백에서도 에러가 나면 루프 방지
                       if (img.src.endsWith('slide4.png')) return;
                       img.src = FALLBACK_IMG;
                     }}
-                    className="relative w-full h-full object-cover rounded-2xl"
+                    className="relative w-full h-full object-cover rounded-2xl reveal"
+                    data-anim={idx % 2 === 0 ? "zoom-in" : "scale"}
+                    data-delay={`${idx * 50 + 100}`}
                   />
                 </article>
               ))}
@@ -499,17 +657,20 @@ export default function Page() {
           </div>
 
           {/* 페이저 */}
-          <div className="mt-6 flex items-center gap-3 reveal">
+          <div className="mt-6 flex items-center gap-3 reveal" data-anim="slide-fade-up" data-delay="300">
             {SLIDE_TITLES.map((_, index) => (
               <button
                 key={index}
                 onClick={() => go(index)}
-                className={`h-10 w-10 rounded-lg border text-[15px] font-semibold transition ${
-                  currentSlideIndex === index
-                    ? 'bg-blue-500 border-blue-500 text-white'
-                    : 'border-neutral-300 text-neutral-700 hover:bg-neutral-50'
-                }`}
+                className={`h-10 w-10 rounded-lg border text-[15px] font-semibold transition reveal`}
+                data-anim={index % 2 === 0 ? "rotate-left" : "rotate-right"}
+                data-delay={`${60 + index * 80}`}
                 aria-selected={currentSlideIndex === index}
+                style={{
+                  ...(currentSlideIndex === index
+                    ? { backgroundColor: '#3b82f6', borderColor: '#3b82f6', color: '#fff' }
+                    : { borderColor: '#e5e7eb', color: '#374151' }),
+                }}
               >
                 {index + 1}
               </button>
@@ -517,71 +678,69 @@ export default function Page() {
           </div>
 
           {/* 캡션 */}
-          <div className="mt-6 reveal">
-            <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900">{SLIDE_TITLES[currentSlideIndex]}</h3>
-            <p className="mt-2 text-neutral-500 text-lg md:text-xl">{SLIDE_DESCS[currentSlideIndex]}</p>
+          <div className="mt-6 reveal" data-anim="diagonal-right" data-delay="400">
+            <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900 reveal" data-anim="slide-fade-up" data-delay="60">
+              {SLIDE_TITLES[currentSlideIndex]}
+            </h3>
+            <p className="mt-2 text-neutral-500 text-lg md:text-xl reveal" data-anim="fade" data-delay="140">
+              {SLIDE_DESCS[currentSlideIndex]}
+            </p>
           </div>
         </section>
 
-        {/* 광고 상품 */}
-        <section id="ad-products" className="relative mx-auto max-w-[1600px] px-6 lg:px-12 mt-10 md:mt-12 mb-24">
-          <div className="mb-6 md:mb-10 reveal">
-            <div className="text-[15px] font-semibold text-blue-500 mb-2">광고 상품</div>
-            <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-neutral-900">
+        {/* 광고 상품 — 카드/텍스트에 리빌만 추가 */}
+        <section id="ad-products" className="relative mx-auto max-w-[1600px] px-6 lg:px-12 mt-10 md:mt-12 mb-24 reveal" data-anim="up" data-delay="0">
+          <div className="mb-6 md:mb-10 reveal" data-anim="slide-fade-up" data-delay="100">
+            <div className="text-[15px] font-semibold text-blue-500 mb-2 reveal" data-anim="diagonal-left">광고 상품</div>
+            <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-neutral-900 reveal" data-anim="zoom-in" data-delay="80">
               위드폼이기에 가능한
               <br className="hidden md:block" />
               원하는 타겟형광고
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10">
-            <article
-              className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden reveal"
-              style={{ transitionDelay: '.02s' }}
-            >
-              <div className="bg-[#EAF3EE] h-[380px] md:h-[440px] flex items-center justify-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-10 reveal" data-anim="up" data-delay="200">
+            <article className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden reveal" data-anim="diagonal-left" data-delay="60">
+              <div className="bg-[#EAF3EE] h-[380px] md:h-[440px] flex items-center justify-center reveal" data-anim="zoom-in" data-delay="80">
                 <img
                   src="/assets/images/ads/holder1.png"
                   alt="브랜딩 광고 미리보기"
-                  className="h-[85%] w-auto object-contain rounded-xl pointer-events-none"
+                  className="h-[85%] w-auto object-contain rounded-xl pointer-events-none floaty reveal"
+                  data-anim="rotate"
+                  data-delay="100"
                 />
               </div>
-              <div className="p-6 md:p-8">
+              <div className="p-6 md:p-8 reveal" data-anim="slide-fade-up" data-delay="120">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900">브랜딩 광고</h3>
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-neutral-500">
-                    →
-                  </span>
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900 reveal" data-anim="left" data-delay="140">브랜딩 광고</h3>
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-neutral-500 reveal" data-anim="rotate-right" data-delay="180">→</span>
                 </div>
-                <p className="mt-3 text-neutral-600 text-[15px] md:text-base">나만의 브랜드를 홍보하고 싶은 광고주분들에게</p>
+                <p className="mt-3 text-neutral-600 text-[15px] md:text-base reveal" data-anim="fade" data-delay="200">나만의 브랜드를 홍보하고 싶은 광고주분들에게</p>
                 <div className="mt-5 flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700">브랜드홍보</span>
-                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700">브랜드노출</span>
+                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700 reveal" data-anim="zoom-in" data-delay="240">브랜드홍보</span>
+                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700 reveal" data-anim="zoom-in" data-delay="280">브랜드노출</span>
                 </div>
               </div>
             </article>
 
-            <article
-              className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden reveal"
-              style={{ transitionDelay: '.12s' }}
-            >
-              <div className="bg-[#EAF3EE] h-[380px] md:h-[440px] flex items-center justify-center">
+            <article className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden reveal" data-anim="diagonal-right" data-delay="120">
+              <div className="bg-[#EAF3EE] h-[380px] md:h-[440px] flex items-center justify-center reveal" data-anim="scale" data-delay="140">
                 <img
                   src="/assets/images/ads/holder2.png"
                   alt="마케팅 광고 미리보기"
-                  className="h-[85%] w-auto object-contain rounded-xl pointer-events-none"
+                  className="h-[85%] w-auto object-contain rounded-xl pointer-events-none floaty reveal"
+                  data-anim="rotate-left"
+                  data-delay="160"
                 />
               </div>
-              <div className="p-6 md:p-8">
+              <div className="p-6 md:p-8 reveal" data-anim="slide-fade-up" data-delay="180">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900">마케팅 광고</h3>
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-neutral-500">
-                    →
-                  </span>
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-neutral-900 reveal" data-anim="right" data-delay="200">마케팅 광고</h3>
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-neutral-500 reveal" data-anim="rotate-left" data-delay="240">→</span>
                 </div>
-                <p className="mt-3 text-neutral-600 text-[15px] md:text-base">식당부터 기업까지 제품판매가 목적인 광고주분들에게</p>
+                <p className="mt-3 text-neutral-600 text-[15px] md:text-base reveal" data-anim="fade" data-delay="260">식당부터 기업까지 제품판매가 목적인 광고주분들에게</p>
                 <div className="mt-5 flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700">제품판매 및 홍보</span>
+                  <span className="px-3 py-1 rounded-full text-[13px] bg-neutral-100 text-neutral-700 reveal" data-anim="zoom-in" data-delay="300">제품판매 및 홍보</span>
                 </div>
               </div>
             </article>
@@ -590,39 +749,87 @@ export default function Page() {
       </main>
 
       {/* ================= FOOTER ================= */}
-      <footer className="bg-neutral-100">
+      <footer className="bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="0">
         <div className="mx-auto max-w-[1100px] px-6 lg:px-12 py-12">
-          <ul className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm font-medium text-neutral-700 reveal">
-            <li><a href="#" className="hover:underline">유튜브</a></li>
-            <li><a href="#" className="hover:underline">네이버 블로그</a></li>
-            <li><a href="#" className="hover:underline">카카오 채널</a></li>
-            <li><a href="#" className="hover:underline">인스타그램</a></li>
+          <ul className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm font-medium text-neutral-700 reveal" data-anim="fade" data-delay="100">
+            {['유튜브','네이버 블로그','카카오 채널','인스타그램'].map((t,i)=>(
+              <li key={t} className="reveal" data-anim={i % 2 === 0 ? "diagonal-left" : "diagonal-right"} data-delay={`${i*60}`}>
+                <a href="#" className="hover:underline">{t}</a>
+              </li>
+            ))}
           </ul>
-          <div className="mt-6 space-y-2 text-sm leading-relaxed text-neutral-500 reveal">
-            <p>Copyright © With FoM Inc.</p>
-            <p>
-              (주)퍼스트오브메이 | 대표 김은수 | 사업자등록번호 000-00-00000 | 통신판매업신고번호 0000-경기파주-0000 | 호스팅 사업자 Amazon Web
-              Service(AWS)
+          <div className="mt-6 space-y-2 text-sm leading-relaxed text-neutral-500 reveal" data-anim="fade" data-delay="200">
+            <p className="reveal" data-anim="slide-fade-up" data-delay="40">Copyright © With FoM Inc.</p>
+            <p className="reveal" data-anim="fade" data-delay="100">
+              (주)퍼스트오브메이 | 대표 김은수 | 사업자등록번호 000-00-00000 | 통신판매업신고번호 0000-경기파주-0000 | 호스팅 사업자 Amazon Web Service(AWS)
             </p>
-            <p>주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) | 전화 문의 031-935-5715</p>
+            <p className="reveal" data-anim="slide-fade-up" data-delay="160">주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) | 전화 문의 031-935-5715</p>
           </div>
-          <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-neutral-600 reveal">
-            <li><a href="#" className="hover:underline">개인정보처리방침</a></li>
-            <li><a href="#" className="hover:underline">이용약관</a></li>
-            <li><a href="#" className="hover:underline">광고 운영정책</a></li>
-            <li><a href="#" className="hover:underline">상품판매 운영정책</a></li>
+          <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-neutral-600 reveal" data-anim="fade" data-delay="300">
+            {['개인정보처리방침','이용약관','광고 운영정책','상품판매 운영정책'].map((t,i)=>(
+              <li key={t} className="reveal" data-anim={i % 2 === 0 ? "zoom-in" : "scale"} data-delay={`${i*60+80}`}>
+                <a href="#" className="hover:underline">{t}</a>
+              </li>
+            ))}
           </ul>
         </div>
       </footer>
 
-      {/* 플로팅 챗봇 버튼 */}
-      <button id="chatbotBtn" className="fixed bottom-6 right-6 z-[60] p-0" aria-label="챗봇 열기">
+      {/* 플로팅 챗봇 버튼(그대로) */}
+      <button
+        id="chatbotBtn"
+        className="fixed bottom-6 right-6 z-[60] p-0"
+        aria-label="챗봇 열기"
+        onClick={() => setChatOpen(true)}
+      >
         <img
           src="/assets/images/icons/챗봇.png"
           alt="챗봇"
           className="w-[72px] h-[72px] object-contain select-none pointer-events-none transition-transform duration-200 [clip-path:circle(40%)] [filter:drop-shadow(0_6px_18px_rgba(0,0,0,.25))]"
         />
       </button>
+
+      {/* 챗봇 모달(그대로) */}
+      {chatOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[70] flex items-center justify-center"
+          onClick={() => setChatOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative bg-white rounded-2xl shadow-xl w-[90vw] max-w-[420px] p-6 z-[71]"
+          >
+            <div className="flex items-start gap-3">
+              <div className="shrink-0">
+                <img src="/assets/images/icons/챗봇.png" alt="" className="w-10 h-10 object-contain" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-neutral-900">챗봇 서비스 준비중</h3>
+                <p className="mt-1 text-sm text-neutral-600">
+                  챗봇서비스가 준비중입니다. 빠른 시일 내 오픈하겠습니다.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setChatOpen(false)}
+                className="px-4 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50"
+              >
+                닫기
+              </button>
+              <a
+                href="/support"
+                className="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+              >
+                1:1 문의
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
