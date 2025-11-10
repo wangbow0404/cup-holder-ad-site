@@ -139,7 +139,13 @@ function KPIList({ items }: { items: OrderKPI[] }) {
   );
 }
 
-function Badge({ children, tone = 'info' as OrderKPI['tone'] }) {
+function Badge({
+  children,
+  tone = 'info',
+}: {
+  children: React.ReactNode;
+  tone?: OrderKPI['tone'];
+}) {
   const cls =
     tone === 'ok'
       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'

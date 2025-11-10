@@ -5,10 +5,12 @@ import Link from 'next/link';
 
 type Lang = 'ko' | 'en';
 const allowed: Lang[] = ['ko', 'en'];
+const ADMIN_ROUTE = '/251109-wilson-admin';
 
 const dict: Record<Lang, any> = {
   ko: {
-    idOrPhone: '아이디',            // ← ID 고정
+    title: 'WITH FoM 로그인',        // ✅ 누락 보완
+    idOrPhone: '아이디',              // ID 고정
     password: '비밀번호',
     remember: '로그인 상태 유지',
     findId: '아이디 찾기',
@@ -26,7 +28,7 @@ const dict: Record<Lang, any> = {
   },
   en: {
     title: 'WITH FoM Login',
-    idOrPhone: 'ID',               // ← ID 고정
+    idOrPhone: 'ID',
     password: 'Password',
     remember: 'Keep me signed in',
     findId: 'Find ID',
@@ -44,7 +46,7 @@ const dict: Record<Lang, any> = {
   },
 };
 
-export default function ConsumerLoginPage() {
+export default function AdminLoginPage() {
   // 1) 초기 언어 ko 고정 → hydration 안전
   const [lang, setLang] = useState<Lang>('ko');
 
@@ -69,17 +71,14 @@ export default function ConsumerLoginPage() {
 
   const t = dict[lang];
 
+  // 로그인 성공 후 이동 경로 (기본: /251109-wilson-admin)
   const search = typeof window !== 'undefined' ? new URLSearchParams(location.search) : null;
   const nextParam = useMemo(() => search?.get('next') ?? null, [search]);
-  const joinHref = useMemo(
-    () => (nextParam ? `/consumer/join?next=${encodeURIComponent(nextParam)}` : '/consumer/join'),
-    [nextParam]
-  );
 
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  // 로그인 제출
+  // 로그인 제출 처리
   const onSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrMsg(null);
@@ -95,20 +94,14 @@ export default function ConsumerLoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/consumer/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginId, password }),
-      });
-
-      if (res.ok) {
-        const to = nextParam ? nextParam : '/consumer';
-        location.href = to;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      if (loginId === 'withfom0501' && password === '1111') {
+        document.cookie = 'withfom_admin=1; path=/; max-age=3600';
+        const target = nextParam || ADMIN_ROUTE;
+        location.href = target;
       } else {
         setErrMsg(t.errors.fail);
       }
-    } catch {
-      setErrMsg(t.errors.network);
     } finally {
       setLoading(false);
     }
@@ -161,7 +154,7 @@ export default function ConsumerLoginPage() {
 
           {/* 로그인 카드 */}
           <section className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6 md:p-7">
-            {/* 상단 타이틀(선택) */}
+            {/* 상단 타이틀 */}
             <h2 className="text-lg font-semibold text-neutral-900 mb-2">{t.title}</h2>
 
             {/* ID 배지 */}
@@ -182,10 +175,10 @@ export default function ConsumerLoginPage() {
                   name="loginId"
                   type="text"
                   autoComplete="username"
+                  defaultValue="withfom0501"          // ✅ 기본값 세팅
                   className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500 text-neutral-900"
-                  placeholder={t.idOrPhone}  // '아이디' 또는 'ID'
+                  placeholder={t.idOrPhone}
                 />
-                {/* 아이콘(옵션) */}
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 4.5V21h16v-2.5C20 16.17 16.33 14 12 14Z"/>
@@ -200,8 +193,8 @@ export default function ConsumerLoginPage() {
                   name="password"
                   type="password"
                   autoComplete="current-password"
-                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500 text-neutral-900"
                   placeholder={t.password}
+                  className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500 text-neutral-900"
                 />
                 <button
                   type="button"
@@ -248,9 +241,9 @@ export default function ConsumerLoginPage() {
                 </span>
               </div>
 
-              {/* 회원가입 */}
+              {/* 회원가입 (필요 시 경로 교체) */}
               <a
-                href={joinHref}
+                href={nextParam ? `/consumer/join?next=${encodeURIComponent(nextParam)}` : '/consumer/join'}
                 className="block w-full text-center bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-medium py-3.5 rounded-xl"
               >
                 {t.toJoin}

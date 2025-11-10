@@ -15,7 +15,7 @@ const dict: Record<Lang, any> = {
     login: '로그인',
     loggingIn: '로그인 중…',
     or: '또는',
-    toJoin: '파트너사 회원가입', // ⭐️ 한국어 텍스트 '관리자 회원가입'으로 수정
+    toJoin: '파트너사 회원가입', 
     errors: {
       required: '아이디와 비밀번호를 입력해주세요.',
       fail: '로그인 실패: 아이디 또는 비밀번호를 확인해주세요.',
@@ -136,11 +136,9 @@ export default function PartnerLoginPage() {
       e.preventDefault();
       setErrMsg(null);
       
-      // 유효성 검사 및 API 호출 건너뛰기 
-      
       setLoading(true);
 
-      // ⭐️⭐️⭐️ 핵심 수정: 이동 경로를 메인 관리자 페이지로 수정 ⭐️⭐️⭐️
+      // ⭐️⭐️⭐️ 수정: 로그인 성공 시 '/partner' 경로로 이동 ⭐️⭐️⭐️
       const to = '/partner'; 
       
       // 딜레이를 주어 로딩 상태를 잠깐 보여줍니다.
@@ -174,15 +172,18 @@ export default function PartnerLoginPage() {
         <div className="w-full max-w-[480px]">
           {/* 로고 + 언어 */}
           <div className="flex items-center justify-between mb-8 md:mb-10">
-            <img
-              src="/assets/images/logo/withfom-logo-horizontal.png"
-              alt="WITH FoM"
-              className="h-10 md:h-12 w-auto"
-              onError={(e) =>
-                ((e.target as HTMLImageElement).src =
-                  '/partner/images/withfom-logo-horizontal.png')
-              }
-            />
+            {/* ⭐️ 로고 링크 수정: href="/" */}
+            <a href="/" className="flex items-center gap-3" aria-label="위드폼 홈으로">
+              <img
+                src="/assets/images/logo/withfom-logo-horizontal.png"
+                alt="WITH FoM"
+                className="h-10 md:h-12 w-auto"
+                onError={(e) =>
+                  ((e.target as HTMLImageElement).src =
+                    '/partner/images/withfom-logo-horizontal.png')
+                }
+              />
+            </a>
             <label className="flex items-center gap-2 text-sm text-neutral-600">
               <svg className="w-5 h-5 text-neutral-500" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm7.93 9h-3.4a15.4 15.4 0 0 0-1.13-5.21A8.025 8.025 0 0 1 19.93 11ZM12 4.07A13.6 13.6 0 0 1 13.9 11h-3.8A13.6 13.6 0 0 1 12 4.07ZM4.07 13h3.4a15.4 15.4 0 0 0 1.13 5.21A8.025 8.025 0 0 1 4.07 13Zm0-2a8.025 8.025 0 0 1 4.53-5.21A15.4 15.4 0 0 0 7.47 11h-3.4Zm7.93 8.93A13.6 13.6 0 0 1 10.1 13h3.8A13.6 13.6 0 0 1 12 19.93Zm3.47-1.72A15.4 15.4 0 0 0 16.53 13h3.4a8.025 8.025 0 0 1-4.53 5.21Z" />
@@ -223,7 +224,7 @@ export default function PartnerLoginPage() {
                     type="text"
                     autoComplete="username"
                     // required 속성 제거 
-                    className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue- text-neutral-900"
+                    className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500"
                     placeholder={t.idOrPhone}
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
@@ -244,7 +245,7 @@ export default function PartnerLoginPage() {
                     type="password"
                     autoComplete="current-password"
                     // required 속성 제거 
-                    className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500 text-neutral-900"
+                    className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500"
                     placeholder={t.password}
                   />
                   <button
