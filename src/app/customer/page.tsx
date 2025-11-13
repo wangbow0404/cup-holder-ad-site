@@ -1,15 +1,73 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { ConsumerHome } from './components/ConsumerHome';
+import { MyCoupons } from './components/MyCoupons';
+import { ECommerce } from './components/ECommerce';
+import { Profile } from './components/Profile';
+import { CustomerService } from './components/CustomerService';
+import { QRScanFlow } from './components/QRScanFlow';
+import { Sidebar } from './components/Sidebar';
 
-// Next.js 페이지 컴포넌트의 가장 기본적인 구조
-export default function AdministratorLoginPage() {
+type Page =
+  | 'home'
+  | 'coupons'
+  | 'ecommerce'
+  | 'profile'
+  | 'customer-service'
+  | 'qr-scan';
+
+export default function ConsumerPage() {
+  const [currentPage, setCurrentPage] = useState<Page>('home');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  const handleQRScan = () => {
+    setCurrentPage('qr-scan');
+  };
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    setCurrentPage('home');
+  };
+
+  if (!isLoggedIn && currentPage === 'qr-scan') {
+    return <QRScanFlow onLogin={handleLogin} />;
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <main className="min-h-dvh bg-gray-50 flex items-center justify-center p-4">
+        <section className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+          <h1 className="mb-6 text-xl font-semibold text-neutral-900">
+            소비자 로그인
+          </h1>
+          <button
+            onClick={handleLogin}
+            className="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 py-3 rounded-lg mb-4 font-medium"
+          >
+            카카오톡으로 시작하기
+          </button>
+          <button
+            onClick={handleQRScan}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium"
+          >
+            QR 코드 스캔하기
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    // min-h-screen과 bg-white만 사용하여 흰색 배경과 전체 높이를 확보합니다.
-    <div className="min-h-screen bg-white">
-      {/* ⭐️ 흰 화면 상태를 확인하기 위한 제목만 포함 */}
-      <h1 className="text-xl p-4 text-neutral-800">페이지 (준비 중)</h1>
-      {/* 여기에 나중에 로그인 UI를 추가할 수 있습니다. */}
-    </div>
+    <main className="flex min-h-dvh bg-gray-50">
+      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <section className="flex-1 ml-64">
+        {currentPage === 'home' && <ConsumerHome onQRScan={handleQRScan} />}
+        {currentPage === 'coupons' && <MyCoupons />}
+        {currentPage === 'ecommerce' && <ECommerce />}
+        {currentPage === 'profile' && <Profile />}
+        {currentPage === 'customer-service' && <CustomerService />}
+      </section>
+    </main>
   );
 }

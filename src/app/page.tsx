@@ -717,7 +717,7 @@ export default function Page() {
           {/* 우측 버튼 + 모바일 햄버거 */}
           <div className="flex items-center gap-3 reveal" data-anim="fade" data-delay="180">
             <a
-              href="/customer/login"
+              href="/customer"
               onClick={closeMenu}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold hidden md:inline-flex reveal"
               data-anim="scale"
@@ -898,7 +898,7 @@ export default function Page() {
           {/* 하단 버튼 */}
           <div className="mt-6 grid grid-cols-1 gap-3">
             <a
-              href="/consumer/login"
+              href="/customer"
               onClick={closeMenu}
               className="w-full text-center px-4 py-3 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 active:scale-[.99] transition"
             >
