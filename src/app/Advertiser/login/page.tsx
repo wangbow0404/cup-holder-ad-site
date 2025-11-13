@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
+import { useRouter } from 'next/navigation';
 
 type Lang = 'ko' | 'en' | 'ja' | 'zh-hans' | 'zh-hant';
 const allowed: Lang[] = ['ko', 'en', 'ja', 'zh-hans', 'zh-hant'];
@@ -15,7 +21,7 @@ const dict: Record<Lang, any> = {
     login: '로그인',
     loggingIn: '로그인 중…',
     or: '또는',
-    toJoin: '광고주 회원가입', // ⭐️ 한국어 텍스트 '관리자 회원가입'으로 수정
+    toJoin: '광고주 회원가입',
     errors: {
       required: '아이디와 비밀번호를 입력해주세요.',
       fail: '로그인 실패: 아이디 또는 비밀번호를 확인해주세요.',
@@ -32,7 +38,7 @@ const dict: Record<Lang, any> = {
     login: 'Log in',
     loggingIn: 'Signing in…',
     or: 'or',
-    toJoin: 'Partner sign up',
+    toJoin: 'Advertiser sign up',
     errors: {
       required: 'Please enter your ID and password.',
       fail: 'Login failed. Check your ID or password.',
@@ -66,7 +72,7 @@ const dict: Record<Lang, any> = {
     login: '登录',
     loggingIn: '登录中…',
     or: '或',
-    toJoin: '合作伙伴注册',
+    toJoin: '广告主注册',
     errors: {
       required: '请输入账号和密码。',
       fail: '登录失败：请检查账号或密码。',
@@ -83,7 +89,7 @@ const dict: Record<Lang, any> = {
     login: '登入',
     loggingIn: '登入中…',
     or: '或',
-    toJoin: '合作夥伴註冊',
+    toJoin: '廣告主註冊',
     errors: {
       required: '請輸入帳號與密碼。',
       fail: '登入失敗：請檢查帳號或密碼。',
@@ -93,98 +99,119 @@ const dict: Record<Lang, any> = {
   },
 };
 
-export default function PartnerLoginPage() {
-  // 1) SSR & 첫 렌더는 ko로 고정 → hydration 안전
+export default function AdvertiserLoginPage() {
+  const router = useRouter();
+
+  /** 1) 언어 상태 (SSR 안전 처리) */
   const [lang, setLang] = useState<Lang>('ko');
 
-  // 2) 마운트 후 저장된/브라우저 언어 적용
   useEffect(() => {
     try {
       let initial: Lang = 'ko';
       const saved = localStorage.getItem('wf_lang') as Lang | null;
-      if (saved && allowed.includes(saved)) initial = saved;
-      else {
-        const nav = navigator.language?.toLowerCase?.() ?? 'ko';
+
+      if (saved && allowed.includes(saved)) {
+        initial = saved;
+      } else {
+        const nav = (navigator.language || 'ko').toLowerCase();
         if (nav.startsWith('ja')) initial = 'ja';
         else if (nav.startsWith('zh-tw') || nav === 'zh-hant') initial = 'zh-hant';
         else if (nav.startsWith('zh')) initial = 'zh-hans';
         else if (nav.startsWith('en')) initial = 'en';
       }
+
       setLang(initial);
-    } catch {}
+    } catch {
+      // 무시
+    }
   }, []);
 
-  // 3) 변경 시 저장
   useEffect(() => {
-    try { localStorage.setItem('wf_lang', lang); } catch {}
+    try {
+      localStorage.setItem('wf_lang', lang);
+    } catch {
+      // 무시
+    }
   }, [lang]);
 
   const t = dict[lang];
 
-  const search = typeof window !== 'undefined' ? new URLSearchParams(location.search) : null;
-  const nextParam = useMemo(() => search?.get('next') ?? null, [search]);
+  /** 2) next 파라미터 읽기 (클라이언트에서만) */
+  const [nextParam, setNextParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const s = new URLSearchParams(window.location.search);
+      setNextParam(s.get('next'));
+    } catch {
+      // 무시
+    }
+  }, []);
+
   const joinHref = useMemo(
-    () => (nextParam ? `/partner/join?next=${encodeURIComponent(nextParam)}` : '/partner/join'),
+    () =>
+      nextParam
+        ? `/partner/join?next=${encodeURIComponent(nextParam)}`
+        : '/partner/join',
     [nextParam]
   );
 
+  /** 3) 폼 상태 */
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
 
+  /** 4) 제출 핸들러 */
   const onSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       setErrMsg(null);
-      
-      // 유효성 검사 및 API 호출 건너뛰기 
-      
       setLoading(true);
 
-      // ⭐️⭐️⭐️ 핵심 수정: 이동 경로를 메인 관리자 페이지로 수정 ⭐️⭐️⭐️
-      const to = '/advertiser'; 
-      
-      // 딜레이를 주어 로딩 상태를 잠깐 보여줍니다.
-      await new Promise(resolve => setTimeout(resolve, 500)); 
-      
-      location.href = to;
-      
-    },
-    []
-  );
+      // 여기서는 실제 로그인 검증 없이 바로 이동만 수행
+      await new Promise((r) => setTimeout(r, 400));
 
-  const togglePw = useCallback(() => {
-    const input = document.getElementById('password') as HTMLInputElement | null;
-    if (input) input.type = input.type === 'password' ? 'text' : 'password';
-  }, []);
+      router.push(nextParam || '/advertiser'); // 임시 목적지
+    },
+    [router, nextParam]
+  );
 
   return (
     <>
       <style
         dangerouslySetInnerHTML={{
           __html: `
-          a:focus-visible, button:focus-visible, input:focus-visible {
-            outline: 2px solid #3b82f6; outline-offset: 2px;
-          }
-          body { font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; }
-        `,
+            a:focus-visible, button:focus-visible, input:focus-visible {
+              outline: 2px solid #3b82f6; outline-offset: 2px;
+            }
+            body {
+              font-family: system-ui, -apple-system, Segoe UI, Roboto,
+               'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+            }
+          `,
         }}
       />
 
       <main className="min-h-dvh grid place-items-center px-5 py-10 bg-neutral-50">
         <div className="w-full max-w-[480px]">
-          {/* 로고 + 언어 */}
+          {/* 로고 + 언어 선택 */}
           <div className="flex items-center justify-between mb-8 md:mb-10">
             <img
               src="/assets/images/logo/withfom-logo-horizontal.png"
               alt="WITH FoM"
               className="h-10 md:h-12 w-auto"
-              onError={(e) =>
-                ((e.target as HTMLImageElement).src =
-                  '/partner/images/withfom-logo-horizontal.png')
-              }
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src =
+                  '/partner/images/withfom-logo-horizontal.png';
+              }}
             />
             <label className="flex items-center gap-2 text-sm text-neutral-600">
-              <svg className="w-5 h-5 text-neutral-500" viewBox="0 0 24 24" fill="currentColor">
+              <svg
+                className="w-5 h-5 text-neutral-500"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
                 <path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm7.93 9h-3.4a15.4 15.4 0 0 0-1.13-5.21A8.025 8.025 0 0 1 19.93 11ZM12 4.07A13.6 13.6 0 0 1 13.9 11h-3.8A13.6 13.6 0 0 1 12 4.07ZM4.07 13h3.4a15.4 15.4 0 0 0 1.13 5.21A8.025 8.025 0 0 1 4.07 13Zm0-2a8.025 8.025 0 0 1 4.53-5.21A15.4 15.4 0 0 0 7.47 11h-3.4Zm7.93 8.93A13.6 13.6 0 0 1 10.1 13h3.8A13.6 13.6 0 0 1 12 19.93Zm3.47-1.72A15.4 15.4 0 0 0 16.53 13h3.4a8.025 8.025 0 0 1-4.53 5.21Z" />
               </svg>
               <select
@@ -201,12 +228,18 @@ export default function PartnerLoginPage() {
             </label>
           </div>
 
-          {/* 카드 */}
+          {/* 카드 영역 */}
           <section className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-6 md:p-7">
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 4.5V21h16v-2.5C20 16.17 16.33 14 12 14Z"/>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 4.5V21h16v-2.5C20 16.17 16.33 14 12 14Z" />
                 </svg>
                 ID
               </span>
@@ -215,20 +248,27 @@ export default function PartnerLoginPage() {
             <form className="space-y-4" onSubmit={onSubmit}>
               {/* 아이디 */}
               <div>
-                <label htmlFor="loginId" className="sr-only">{t.idOrPhone}</label>
+                <label htmlFor="loginId" className="sr-only">
+                  {t.idOrPhone}
+                </label>
                 <div className="relative">
                   <input
                     id="loginId"
                     name="loginId"
                     type="text"
                     autoComplete="username"
-                    // required 속성 제거 
                     className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500"
                     placeholder={t.idOrPhone}
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 4.5V21h16v-2.5C20 16.17 16.33 14 12 14Z"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 4.5V21h16v-2.5C20 16.17 16.33 14 12 14Z" />
                     </svg>
                   </span>
                 </div>
@@ -236,14 +276,15 @@ export default function PartnerLoginPage() {
 
               {/* 비밀번호 */}
               <div>
-                <label htmlFor="password" className="sr-only">{t.password}</label>
+                <label htmlFor="password" className="sr-only">
+                  {t.password}
+                </label>
                 <div className="relative">
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPw ? 'text' : 'password'}
                     autoComplete="current-password"
-                    // required 속성 제거 
                     className="w-full rounded-xl border border-neutral-300 px-4 py-3 pr-10 focus:border-blue-500"
                     placeholder={t.password}
                   />
@@ -251,10 +292,16 @@ export default function PartnerLoginPage() {
                     type="button"
                     aria-label="toggle password"
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
-                    onClick={togglePw}
+                    onClick={() => setShowPw((v) => !v)}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5c-5 0-9 4-10 7 1 3 5 7 10 7s9-4 10-7c-1-3-5-7-10-7Zm0 12a5 5 0 1 1 5-5 5 5 0 0 1-5 5Z"/>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5c-5 0-9 4-10 7 1 3 5 7 10 7s9-4 10-7c-1-3-5-7-10-7Zm0 12a5 5 0 1 1 5-5 5 5 0 0 1-5 5Z" />
                     </svg>
                   </button>
                 </div>
@@ -267,14 +314,22 @@ export default function PartnerLoginPage() {
                   <span className="text-neutral-700">{t.remember}</span>
                 </label>
                 <div className="flex items-center gap-3">
-                  <a href="#" className="text-neutral-500 hover:text-neutral-800">{t.findId}</a>
+                  <a href="#" className="text-neutral-500 hover:text-neutral-800">
+                    {t.findId}
+                  </a>
                   <span className="text-neutral-300">|</span>
-                  <a href="#" className="text-neutral-500 hover:text-neutral-800">{t.findPw}</a>
+                  <a href="#" className="text-neutral-500 hover:text-neutral-800">
+                    {t.findPw}
+                  </a>
                 </div>
               </div>
 
-              {/* 에러 */}
-              {errMsg && <p className="text-red-600 text-sm" role="alert">{errMsg}</p>}
+              {/* 에러 메시지 */}
+              {errMsg && (
+                <p className="text-red-600 text-sm" role="alert">
+                  {errMsg}
+                </p>
+              )}
 
               {/* 로그인 버튼 */}
               <button
@@ -293,7 +348,7 @@ export default function PartnerLoginPage() {
                 </span>
               </div>
 
-              {/* 회원가입 */}
+              {/* 회원가입 버튼 */}
               <a
                 href={joinHref}
                 className="block w-full text-center bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-medium py-3.5 rounded-xl"
