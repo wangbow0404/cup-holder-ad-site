@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from 'react';
 
 /* ================================
    전역 선언 (카카오맵 타입)
@@ -45,7 +51,11 @@ const RADIUS_OPTIONS = [
 ];
 
 // 기본 지도 중심 (서울 시청 근처)
-const DEFAULT_CENTER = { lat: 37.5665, lng: 126.9780 };
+const DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 };
+
+/* ================================
+   더미 데이터
+=================================== */
 
 // 최근 당첨자 5명
 const WINNERS = [
@@ -110,7 +120,12 @@ const CAMPAIGNS = [
 
 /* 거리 계산 (Haversine) */
 const toRad = (value: number) => (value * Math.PI) / 180;
-const getDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+const getDistance = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) => {
   const R = 6371000; // m
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
@@ -144,7 +159,8 @@ export default function Page() {
 
   // 당첨자 인덱스 + 티커 전용 상태
   const [winnerIndex, setWinnerIndex] = useState(0);
-  const [disableTickerTransition, setDisableTickerTransition] = useState(false);
+  const [disableTickerTransition, setDisableTickerTransition] =
+    useState(false);
 
   // 카카오 지도 관련 상태
   const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
@@ -152,10 +168,15 @@ export default function Page() {
   const [map, setMap] = useState<any | null>(null);
   const markersRef = useRef<any[]>([]);
   const markerMapRef = useRef<Record<string, any>>({});
-  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
   const [selectedRadius, setSelectedRadius] = useState<number>(3000);
-  const [visibleCampaigns, setVisibleCampaigns] = useState(CAMPAIGNS);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [visibleCampaigns, setVisibleCampaigns] =
+    useState<typeof CAMPAIGNS>(CAMPAIGNS);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
+    null,
+  );
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
@@ -184,21 +205,31 @@ export default function Page() {
     (n: number) => {
       setCurrentSlideIndex((n + slidesLengthMemo) % slidesLengthMemo);
     },
-    [slidesLengthMemo]
+    [slidesLengthMemo],
   );
-  const next = useCallback(() => go(currentSlideIndex + 1), [currentSlideIndex, go]);
-  const prev = useCallback(() => go(currentSlideIndex - 1), [currentSlideIndex, go]);
+  const next = useCallback(
+    () => go(currentSlideIndex + 1),
+    [currentSlideIndex, go],
+  );
+  const prev = useCallback(
+    () => go(currentSlideIndex - 1),
+    [currentSlideIndex, go],
+  );
 
   // 리빌 애니메이션
   useEffect(() => {
     document.documentElement.style.scrollBehavior = 'auto';
-    if ('scrollRestoration' in history) (history as any).scrollRestoration = 'manual';
+    if ('scrollRestoration' in history)
+      (history as any).scrollRestoration = 'manual';
+
     const onLoad = () => {
       document.documentElement.style.scrollBehavior = 'smooth';
     };
     window.addEventListener('load', onLoad);
 
-    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
+    const reveals = Array.from(
+      document.querySelectorAll<HTMLElement>('.reveal'),
+    );
 
     const show = (el: HTMLElement) => {
       const delay = Number(el.dataset.delay || 0);
@@ -216,27 +247,34 @@ export default function Page() {
             }
           });
         },
-        { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+        { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
       );
 
       reveals.forEach((el) => {
         const r = el.getBoundingClientRect();
-        const inView = r.top < (window.innerHeight || 0) * 0.9 && r.bottom > 0;
+        const inView =
+          r.top < (window.innerHeight || 0) * 0.9 && r.bottom > 0;
         if (inView) show(el);
         else io.observe(el);
       });
+
+      return () => {
+        window.removeEventListener('load', onLoad);
+        io.disconnect();
+      };
     } else {
-      reveals.forEach(show);
+      // IntersectionObserver 미지원 브라우저: 처음 화면에 보이는 요소만 등장시키기
+      reveals.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const inView =
+          r.top < (window.innerHeight || 0) * 0.9 && r.bottom > 0;
+        if (inView) show(el);
+      });
+
+      return () => {
+        window.removeEventListener('load', onLoad);
+      };
     }
-
-    const t = setTimeout(() => {
-      reveals.forEach((el) => el.classList.add('active'));
-    }, 700);
-
-    return () => {
-      window.removeEventListener('load', onLoad);
-      clearTimeout(t);
-    };
   }, []);
 
   // 컵홀더 슬라이더 자동재생 (10초)
@@ -267,7 +305,7 @@ export default function Page() {
       { src: '/assets/images/ads/slide3.png', speed: '0.05' },
       { src: '/assets/images/ads/slide4.png', speed: '0.07' },
     ],
-    []
+    [],
   );
   const FALLBACK_IMG = '/assets/images/ads/slide4.png';
 
@@ -310,9 +348,10 @@ export default function Page() {
       return;
     }
 
-    const existingScript = document.querySelector<HTMLScriptElement>(
-      'script[data-kakao-map-sdk="true"]'
-    );
+    const existingScript =
+      document.querySelector<HTMLScriptElement>(
+        'script[data-kakao-map-sdk="true"]',
+      );
     if (existingScript) {
       existingScript.addEventListener('load', () => {
         if (window.kakao && window.kakao.maps) {
@@ -342,7 +381,10 @@ export default function Page() {
   useEffect(() => {
     if (!isKakaoLoaded || !mapContainerRef.current || map) return;
     const kakao = window.kakao;
-    const center = new kakao.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
+    const center = new kakao.maps.LatLng(
+      DEFAULT_CENTER.lat,
+      DEFAULT_CENTER.lng,
+    );
     const m = new kakao.maps.Map(mapContainerRef.current, {
       center,
       level: 5,
@@ -369,13 +411,15 @@ export default function Page() {
         setIsLocating(false);
       },
       () => {
-        setLocationError('현재 위치를 가져오지 못했습니다. 위치 권한을 다시 확인해주세요.');
+        setLocationError(
+          '현재 위치를 가져오지 못했습니다. 위치 권한을 다시 확인해주세요.',
+        );
         setIsLocating(false);
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
-      }
+      },
     );
   };
 
@@ -414,7 +458,12 @@ export default function Page() {
     if (userPos) {
       filtered = CAMPAIGNS.filter((c) => {
         if (!c.lat || !c.lng) return false;
-        const dist = getDistance(userPos.lat, userPos.lng, c.lat, c.lng);
+        const dist = getDistance(
+          userPos.lat,
+          userPos.lng,
+          c.lat,
+          c.lng,
+        );
         return dist <= selectedRadius;
       });
 
@@ -452,14 +501,18 @@ export default function Page() {
 
       const position = new kakao.maps.LatLng(c.lat, c.lng);
 
-      // 빨간 핀 이미지 (이미지 경로에 맞게 저장)
+      // 빨간 핀 이미지
       const imageSrc = '/assets/images/icons/map-pin-red.png';
       const imageSize = new kakao.maps.Size(32, 40);
       const imageOption = {
         offset: new kakao.maps.Point(16, 40),
       };
 
-      const markerImage = new kakao.maps.MarkerImage(imageSrc, imageSize, imageOption);
+      const markerImage = new kakao.maps.MarkerImage(
+        imageSrc,
+        imageSize,
+        imageOption,
+      );
 
       const marker = new kakao.maps.Marker({
         position,
@@ -544,11 +597,15 @@ export default function Page() {
       <section className="fixed top-0 left-0 right-0 z-[60] bg-neutral-900 text-white text-sm md:text-base">
         <div className="mx-auto max-w-[1600px] px-4 md:px-6 lg:px-12 h-11 md:h-12 flex items-center justify-center">
           <div className="flex items-center gap-3">
-            <span className="font-semibold text-sm md:text-base">🎉 최근 당첨자</span>
+            <span className="font-semibold text-sm md:text-base">
+              🎉 최근 당첨자
+            </span>
             <div className="overflow-hidden h-7">
               <div
                 className={`flex flex-col ${
-                  disableTickerTransition ? '' : 'transition-transform duration-500'
+                  disableTickerTransition
+                    ? ''
+                    : 'transition-transform duration-500'
                 }`}
                 style={{
                   transform: `translateY(-${winnerIndex * 28}px)`,
@@ -599,7 +656,7 @@ export default function Page() {
               data-anim="slide-fade-down"
               data-delay="100"
             >
-              {/* Home 링크 추가 */}
+              {/* Home 링크 */}
               <a
                 href="#hero"
                 className="py-2 font-medium hover:text-blue-600 reveal"
@@ -715,7 +772,11 @@ export default function Page() {
           </div>
 
           {/* 우측 버튼 + 모바일 햄버거 */}
-          <div className="flex items-center gap-3 reveal" data-anim="fade" data-delay="180">
+          <div
+            className="flex items-center gap-3 reveal"
+            data-anim="fade"
+            data-delay="180"
+          >
             <a
               href="/customer"
               onClick={closeMenu}
@@ -753,12 +814,21 @@ export default function Page() {
               aria-expanded={isMenuOpen}
               aria-controls="mobileMenuPanel"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d={isMenuOpen ? 'M6 18L18 6M6 6l12 12' : 'M4 6h16M4 12h16m-7 6h7'}
+                  d={
+                    isMenuOpen
+                      ? 'M6 18L18 6M6 6l12 12'
+                      : 'M4 6h16M4 12h16m-7 6h7'
+                  }
                 />
               </svg>
             </button>
@@ -772,7 +842,9 @@ export default function Page() {
       {/* ===== 모바일 메뉴 오버레이 ===== */}
       <div
         className={`fixed inset-0 top-[116px] bg-black/40 z-[65] md:hidden transition-opacity duration-300 ${
-          isMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          isMenuOpen
+            ? 'opacity-100 pointer-events-auto'
+            : 'opacity-0 pointer-events-none'
         }`}
         onClick={closeMenu}
         aria-hidden="true"
@@ -805,15 +877,32 @@ export default function Page() {
                 aria-expanded={isAdMenuOpen}
               >
                 광고매체
-                <span className={`transition-transform duration-200 ${isAdMenuOpen ? 'rotate-90' : 'rotate-0'}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                <span
+                  className={`transition-transform duration-200 ${
+                    isAdMenuOpen ? 'rotate-90' : 'rotate-0'
+                  }`}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 5l7 7-7 7"
+                    ></path>
                   </svg>
                 </span>
               </button>
               <div
                 className="overflow-hidden transition-[max-height,opacity] duration-300"
-                style={{ maxHeight: isAdMenuOpen ? '500px' : 0, opacity: isAdMenuOpen ? 1 : 0 }}
+                style={{
+                  maxHeight: isAdMenuOpen ? '500px' : 0,
+                  opacity: isAdMenuOpen ? 1 : 0,
+                }}
               >
                 <div className="space-y-1 pt-2">
                   <a
@@ -833,7 +922,9 @@ export default function Page() {
                   <a
                     href="/bag.html"
                     onClick={closeMenu}
-                    onKeyDown={(e) => e.key === 'Enter' && closeMenu()}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && closeMenu()
+                    }
                     className="block rounded-lg px-4 py-2 text-base font-normal text-neutral-600 hover:bg-neutral-100"
                   >
                     포장봉투 광고
@@ -858,15 +949,32 @@ export default function Page() {
                 aria-expanded={isCommOpen}
               >
                 커뮤니티
-                <span className={`transition-transform duration-200 ${isCommOpen ? 'rotate-90' : 'rotate-0'}`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
+                <span
+                  className={`transition-transform duration-200 ${
+                    isCommOpen ? 'rotate-90' : 'rotate-0'
+                  }`}
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 5l7 7-7 7"
+                    ></path>
                   </svg>
                 </span>
               </button>
               <div
                 className="overflow-hidden transition-[max-height,opacity] duration-300"
-                style={{ maxHeight: isCommOpen ? '500px' : 0, opacity: isCommOpen ? 1 : 0 }}
+                style={{
+                  maxHeight: isCommOpen ? '500px' : 0,
+                  opacity: isCommOpen ? 1 : 0,
+                }}
               >
                 <div className="space-y-1 pt-2">
                   <a
@@ -918,13 +1026,7 @@ export default function Page() {
             >
               광고주 페이지
             </a>
-            <a
-              href="/administrator/login"
-              onClick={closeMenu}
-              className="w-full text-center px-4 py-3 rounded-md bg-neutral-900 text-white font-semibold hover:bg-neutral-800 active:scale-[.99] transition"
-            >
-              관리자 페이지
-            </a>
+            
           </div>
         </div>
       </div>
@@ -933,7 +1035,9 @@ export default function Page() {
       <section className="relative bg-white border-b border-neutral-200">
         <div className="mx-auto max-w-[1600px] px-4 md:px-6 lg:px-12 py-4">
           <form
-            className="max-w-[640px] mx-auto flex items-center gap-3"
+            className="max-w-[640px] mx-auto flex items-center gap-3 reveal"
+            data-anim="slide-fade-up"
+            data-delay="40"
             onSubmit={(e) => e.preventDefault()}
           >
             <input
@@ -955,7 +1059,11 @@ export default function Page() {
       <main id="main" className="bg-white text-neutral-900">
         {/* HERO – 1260 x 890 비율 중앙 배너 */}
         <section id="hero" className="w-full bg-white">
-          <div className="relative w-full aspect-[1260/890] overflow-hidden">
+          <div
+            className="relative w-full aspect-[1260/890] overflow-hidden reveal"
+            data-anim="zoom-in"
+            data-delay="0"
+          >
             {HERO_SLIDES.map((src, idx) => (
               <img
                 key={idx}
@@ -1004,7 +1112,11 @@ export default function Page() {
           data-delay="0"
         >
           <div className="mb-6">
-            <div className="flex items-center gap-2 reveal" data-anim="diagonal-left" data-delay="20">
+            <div
+              className="flex items-center gap-2 reveal"
+              data-anim="diagonal-left"
+              data-delay="20"
+            >
               <h2
                 className="text-3xl md:text-5xl font-extrabold leading-tight text-neutral-900 reveal"
                 data-anim="slide-fade-up"
@@ -1066,7 +1178,11 @@ export default function Page() {
               ›
             </button>
 
-            <div id="pmTrack" className="absolute inset-0" suppressHydrationWarning>
+            <div
+              id="pmTrack"
+              className="absolute inset-0"
+              suppressHydrationWarning
+            >
               {SLIDES.map((slide, idx) => (
                 <article
                   key={idx}
@@ -1103,20 +1219,30 @@ export default function Page() {
           </div>
 
           {/* 컵홀더 슬라이더 페이저 */}
-          <div className="mt-6 flex items-center gap-3 reveal" data-anim="slide-fade-up" data-delay="300">
+          <div
+            className="mt-6 flex items-center gap-3 reveal"
+            data-anim="slide-fade-up"
+            data-delay="300"
+          >
             {SLIDE_TITLES.map((_, index) => (
               <button
                 key={index}
                 onClick={() => go(index)}
                 className="h-10 w-10 rounded-lg border text-[15px] font-semibold transition reveal"
-                data-anim={index % 2 === 0 ? 'rotate-left' : 'rotate-right'}
+                data-anim={
+                  index % 2 === 0 ? 'rotate-left' : 'rotate-right'
+                }
                 data-delay={`${60 + index * 80}`}
                 aria-selected={currentSlideIndex === index}
-                style={{
-                  ...(currentSlideIndex === index
-                    ? { backgroundColor: '#3b82f6', borderColor: '#3b82f6', color: '#fff' }
-                    : { borderColor: '#e5e7eb', color: '#374151' }),
-                }}
+                style={
+                  currentSlideIndex === index
+                    ? {
+                        backgroundColor: '#3b82f6',
+                        borderColor: '#3b82f6',
+                        color: '#fff',
+                      }
+                    : { borderColor: '#e5e7eb', color: '#374151' }
+                }
               >
                 {index + 1}
               </button>
@@ -1124,7 +1250,11 @@ export default function Page() {
           </div>
 
           {/* 컵홀더 슬라이더 캡션 */}
-          <div className="mt-6 reveal" data-anim="diagonal-right" data-delay="400">
+          <div
+            className="mt-6 reveal"
+            data-anim="diagonal-right"
+            data-delay="400"
+          >
             <h3
               className="text-2xl md:text-3xl font-extrabold text-neutral-900 reveal"
               data-anim="slide-fade-up"
@@ -1187,8 +1317,10 @@ export default function Page() {
                 key={c.id}
                 href={c.href}
                 className="group rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col hover:-translate-y-1 hover:shadow-lg transition transform duration-200 reveal"
-                data-anim={idx % 2 === 0 ? 'diagonal-left' : 'diagonal-right'}
-                data-delay={80 + idx * 60}
+                data-anim={
+                  idx % 2 === 0 ? 'slide-fade-up' : 'diagonal-right'
+                }
+                data-delay={60 + idx * 120}
               >
                 {/* 썸네일 영역 */}
                 <div className="relative bg-neutral-100 aspect-[4/3] overflow-hidden">
@@ -1252,7 +1384,8 @@ export default function Page() {
               >
                 위치 기반으로 반경 안에 있는 위드폼 캠페인 카페를 찾아드려요.
                 <br className="hidden md:block" />
-                위치 권한을 허용하면 내 주변에서 진행 중인 이벤트만 모아서 볼 수 있어요.
+                위치 권한을 허용하면 내 주변에서 진행 중인 이벤트만 모아서 볼 수
+                있어요.
               </p>
             </div>
 
@@ -1296,16 +1429,16 @@ export default function Page() {
           )}
 
           {/* 지도 + 리스트 레이아웃 */}
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-6 lg:gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-6 lg:gap-8 items-stretch">
             {/* 지도 영역 */}
             <div
-              className="rounded-3xl border border-neutral-200 overflow-hidden bg-neutral-100/70 reveal"
+              className="rounded-3xl border border-neutral-200 overflow-hidden bg-neutral-100/70 reveal h-full min-h-[320px]"
               data-anim="slide-fade-up"
               data-delay="140"
             >
-              <div ref={mapContainerRef} className="w-full h-[360px] md:h-[420px]" />
+              <div ref={mapContainerRef} className="w-full h-full" />
               {!isKakaoLoaded && (
-                <div className="flex items-center justify-center py-10 text-sm text-neutral-500">
+                <div className="flex items-center justify-center h-full text-sm text-neutral-500">
                   지도를 불러오는 중입니다...
                 </div>
               )}
@@ -1333,7 +1466,9 @@ export default function Page() {
                 {visibleCampaigns.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center text-xs md:text-sm text-neutral-500">
                     <p>선택한 반경 내 진행 중인 캠페인이 없습니다.</p>
-                    <p className="mt-1">반경을 넓혀보거나, 위치 권한을 다시 확인해 주세요.</p>
+                    <p className="mt-1">
+                      반경을 넓혀보거나, 위치 권한을 다시 확인해 주세요.
+                    </p>
                   </div>
                 ) : (
                   visibleCampaigns.map((c) => (
@@ -1362,7 +1497,9 @@ export default function Page() {
                             {c.tag && (
                               <>
                                 <span className="text-neutral-300">•</span>
-                                <span className="text-neutral-500">{c.tag}</span>
+                                <span className="text-neutral-500">
+                                  {c.tag}
+                                </span>
                               </>
                             )}
                           </div>
@@ -1391,40 +1528,58 @@ export default function Page() {
       </main>
 
       {/* ================= FOOTER ================= */}
-      <footer className="bg-neutral-100 reveal" data-anim="slide-fade-up" data-delay="0">
+      <footer
+        className="bg-neutral-100 reveal"
+        data-anim="slide-fade-up"
+        data-delay="0"
+      >
         <div className="mx-auto max-w-[1100px] px-6 lg:px-12 py-12">
           <ul
             className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm font-medium text-neutral-700 reveal"
             data-anim="fade"
             data-delay="100"
           >
-            {['유튜브', '네이버 블로그', '카카오 채널', '인스타그램'].map((t, i) => (
-              <li
-                key={t}
-                className="reveal"
-                data-anim={i % 2 === 0 ? 'diagonal-left' : 'diagonal-right'}
-                data-delay={`${i * 60}`}
-              >
-                <a href="#" className="hover:underline">
-                  {t}
-                </a>
-              </li>
-            ))}
+            {['유튜브', '네이버 블로그', '카카오 채널', '인스타그램'].map(
+              (t, i) => (
+                <li
+                  key={t}
+                  className="reveal"
+                  data-anim={
+                    i % 2 === 0 ? 'diagonal-left' : 'diagonal-right'
+                  }
+                  data-delay={`${i * 60}`}
+                >
+                  <a href="#" className="hover:underline">
+                    {t}
+                  </a>
+                </li>
+              ),
+            )}
           </ul>
           <div
             className="mt-6 space-y-2 text-sm leading-relaxed text-neutral-500 reveal"
             data-anim="fade"
             data-delay="200"
           >
-            <p className="reveal" data-anim="slide-fade-up" data-delay="40">
+            <p
+              className="reveal"
+              data-anim="slide-fade-up"
+              data-delay="40"
+            >
               Copyright © With FoM Inc.
             </p>
             <p className="reveal" data-anim="fade" data-delay="100">
-              (주)퍼스트오브메이 | 대표 김은수 | 사업자등록번호 000-00-00000 | 통신판매업신고번호 0000-경기파주-0000 |
-              호스팅 사업자 Amazon Web Service(AWS)
+              (주)퍼스트오브메이 | 대표 김은수 | 사업자등록번호 000-00-00000 |
+              통신판매업신고번호 0000-경기파주-0000 | 호스팅 사업자 Amazon Web
+              Service(AWS)
             </p>
-            <p className="reveal" data-anim="slide-fade-up" data-delay="160">
-              주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) | 전화 문의 031-935-5715
+            <p
+              className="reveal"
+              data-anim="slide-fade-up"
+              data-delay="160"
+            >
+              주소 경기 파주시 청석로272, 10층 1004-106호 (동패동,센타프라자1) |
+              전화 문의 031-935-5715
             </p>
           </div>
           <ul
@@ -1432,7 +1587,12 @@ export default function Page() {
             data-anim="fade"
             data-delay="300"
           >
-            {['개인정보처리방침', '이용약관', '광고 운영정책', '상품판매 운영정책'].map((t, i) => (
+            {[
+              '개인정보처리방침',
+              '이용약관',
+              '광고 운영정책',
+              '상품판매 운영정책',
+            ].map((t, i) => (
               <li
                 key={t}
                 className="reveal"
@@ -1451,7 +1611,9 @@ export default function Page() {
       {/* 플로팅 챗봇 버튼 */}
       <button
         id="chatbotBtn"
-        className="fixed bottom-6 right-6 z-[60] p-0"
+        className="fixed bottom-6 right-6 z-[60] p-0 reveal"
+        data-anim="zoom-in"
+        data-delay="0"
         aria-label="챗봇 열기"
         onClick={() => setChatOpen(true)}
       >
@@ -1473,14 +1635,22 @@ export default function Page() {
           <div className="absolute inset-0 bg-black/40" />
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative bg-white rounded-2xl shadow-xl w-[90vw] max-w-[420px] p-6 z-[71]"
+            className="relative bg-white rounded-2xl shadow-xl w-[90vw] max-w-[420px] p-6 z-[71] reveal"
+            data-anim="zoom-in"
+            data-delay="0"
           >
             <div className="flex items-start gap-3">
               <div className="shrink-0">
-                <img src="/assets/images/icons/챗봇.png" alt="" className="w-10 h-10 object-contain" />
+                <img
+                  src="/assets/images/icons/챗봇.png"
+                  alt=""
+                  className="w-10 h-10 object-contain"
+                />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-neutral-900">챗봇 서비스 준비중</h3>
+                <h3 className="text-lg font-bold text-neutral-900">
+                  챗봇 서비스 준비중
+                </h3>
                 <p className="mt-1 text-sm text-neutral-600">
                   챗봇서비스가 준비중입니다. 빠른 시일 내 오픈하겠습니다.
                 </p>

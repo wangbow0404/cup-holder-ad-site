@@ -1,101 +1,184 @@
-import { Home, ClipboardList, Package, Gift, QrCode, Receipt, Settings, User } from 'lucide-react';
-import { PartnerData } from '../page';
+'use client';
 
-interface SidebarProps {
+import React from 'react';
+import type { PartnerData } from '../page';
+import {
+  LayoutDashboard,
+  ClipboardList,
+  PackageOpen,
+  Gift,
+  BarChart3,
+  ScanLine,
+  WalletCards,
+  Store,
+  Settings2,
+} from 'lucide-react';
+
+type SidebarProps = {
   activeMenu: string;
-  onMenuChange: (menu: string) => void;
+  onMenuChange: (key: string) => void;
   partnerData: PartnerData;
-}
-
-const getTierColor = (tier: string) => {
-  switch (tier) {
-    case 'bronze': return 'text-orange-600';
-    case 'silver': return 'text-gray-400';
-    case 'gold': return 'text-yellow-500';
-    case 'platinum': return 'text-purple-500';
-    default: return 'text-gray-600';
-  }
+  variant?: 'desktop' | 'mobile';
 };
 
-const getTierName = (tier: string) => {
-  switch (tier) {
-    case 'bronze': return '브론즈';
-    case 'silver': return '실버';
-    case 'gold': return '골드';
-    case 'platinum': return '플래티넘';
-    default: return tier;
-  }
-};
+const menuItems: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    id: 'dashboard',
+    label: '대시보드',
+    icon: <LayoutDashboard className="w-4 h-4" />,
+  },
+  {
+    id: 'daily-report',
+    label: '일일 소진 보고',
+    icon: <ClipboardList className="w-4 h-4" />,
+  },
+  {
+    id: 'inventory',
+    label: '컵홀더 발주',
+    icon: <PackageOpen className="w-4 h-4" />,
+  },
+  {
+    id: 'reward-status',
+    label: '리워드 현황',
+    icon: <BarChart3 className="w-4 h-4" />,
+  },
+  {
+    id: 'reward-settings',
+    label: '리워드 설정',
+    icon: <Gift className="w-4 h-4" />,
+  },
+  {
+    id: 'qr-scanner',
+    label: 'QR 스캐너',
+    icon: <ScanLine className="w-4 h-4" />,
+  },
+  {
+    id: 'settlement',
+    label: '정산',
+    icon: <WalletCards className="w-4 h-4" />,
+  },
+  {
+    id: 'store-settings',
+    label: '매장 정보 수정',
+    icon: <Store className="w-4 h-4" />,
+  },
+  {
+    id: 'account-settings',
+    label: '계정 설정',
+    icon: <Settings2 className="w-4 h-4" />,
+  },
+];
 
-export function Sidebar({ activeMenu, onMenuChange, partnerData }: SidebarProps) {
-  const menuItems = [
-    { id: 'dashboard', label: '대시보드', icon: Home },
-    { id: 'operations', label: '운영 관리', icon: ClipboardList, submenu: [
-      { id: 'daily-report', label: '일일 소진 보고' },
-      { id: 'inventory', label: '컵홀더 발주' },
-    ]},
-    { id: 'rewards', label: '리워드 관리', icon: Gift, submenu: [
-      { id: 'reward-settings', label: '리워드 설정' },
-      { id: 'reward-status', label: '쿠폰/포인트 현황' },
-      { id: 'qr-scanner', label: '쿠폰 사용 처리' },
-    ]},
-    { id: 'settlement', label: '정산', icon: Receipt },
-    { id: 'account', label: '계정 설정', icon: Settings, submenu: [
-      { id: 'store-settings', label: '매장 정보 수정' },
-      { id: 'account-settings', label: '정산 계좌' },
-    ]},
-  ];
+export function Sidebar({
+  activeMenu,
+  onMenuChange,
+  partnerData,
+  variant = 'desktop',
+}: SidebarProps) {
+  const tierLabel =
+    partnerData.tier === 'bronze'
+      ? '브론즈'
+      : partnerData.tier === 'silver'
+      ? '실버'
+      : partnerData.tier === 'gold'
+      ? '골드'
+      : '플래티넘';
+
+  const tierClass =
+    partnerData.tier === 'gold'
+      ? 'bg-amber-50 text-amber-700'
+      : partnerData.tier === 'platinum'
+      ? 'bg-slate-900 text-slate-50'
+      : partnerData.tier === 'silver'
+      ? 'bg-slate-50 text-slate-600'
+      : 'bg-orange-50 text-orange-600';
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-gray-900 mb-2">{partnerData.storeName}</h1>
-        <div className={`inline-flex items-center px-3 py-1 rounded-full bg-gray-100 ${getTierColor(partnerData.tier)}`}>
-          <span className="text-sm">{getTierName(partnerData.tier)}</span>
+    <nav
+      className={`h-full bg-white flex flex-col ${
+        variant === 'desktop' ? 'border-r border-gray-100' : ''
+      }`}
+    >
+      {/* 상단 매장 정보 (데스크탑 전용) */}
+      {variant === 'desktop' && (
+        <div className="px-5 pt-6 pb-4 border-b border-gray-50">
+          <div className="flex flex-col gap-2">
+            <div className="text-sm font-semibold text-neutral-900">
+              {partnerData.storeName}
+            </div>
+            <span
+              className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${tierClass}`}
+            >
+              {tierLabel}
+            </span>
+          </div>
         </div>
+      )}
+
+      {/* 메뉴 리스트 */}
+      <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {menuItems.map((item) => {
+          const isActive = activeMenu === item.id;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onMenuChange(item.id)}
+              className={`
+                w-full flex items-center gap-3 text-sm rounded-2xl px-3 py-2.5
+                transition-all
+                ${
+                  isActive
+                    ? 'bg-blue-50 text-blue-600 shadow-[0_0_0_1px_rgba(59,130,246,0.18)]'
+                    : 'text-gray-700 hover:bg-gray-50'
+                }
+              `}
+            >
+              <span
+                className={`
+                  flex items-center justify-center rounded-xl border w-8 h-8
+                  ${
+                    isActive
+                      ? 'border-blue-200 bg-white text-blue-600'
+                      : 'border-gray-200 bg-white text-gray-600'
+                  }
+                `}
+              >
+                {item.icon}
+              </span>
+              <span className="truncate">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-4">
-        {menuItems.map((item) => (
-          <div key={item.id} className="mb-2">
-            {item.submenu ? (
-              <>
-                <div className="flex items-center gap-3 px-3 py-2 text-gray-700">
-                  <item.icon className="w-5 h-5" />
-                  <span className="text-sm">{item.label}</span>
-                </div>
-                <div className="ml-8 mt-1 space-y-1">
-                  {item.submenu.map((subItem) => (
-                    <button
-                      key={subItem.id}
-                      onClick={() => onMenuChange(subItem.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                        activeMenu === subItem.id
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {subItem.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <button
-                onClick={() => onMenuChange(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  activeMenu === item.id
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="text-sm">{item.label}</span>
-              </button>
-            )}
+      {/* 하단 프로필/마이 버튼 */}
+      <div className="px-4 pb-5 pt-3 border-t border-gray-100">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2 text-xs text-gray-600"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-neutral-900 text-white flex items-center justify-center text-[11px]">
+              N
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-[11px]">
+                파트너 마이페이지
+              </span>
+              <span className="text-[10px] text-gray-500">
+                정산·계정 정보를 확인하세요
+              </span>
+            </div>
           </div>
-        ))}
-      </nav>
-    </aside>
+          <span className="text-[11px] text-gray-400">›</span>
+        </button>
+      </div>
+    </nav>
   );
 }
